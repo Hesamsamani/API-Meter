@@ -1,6 +1,8 @@
-const { Tray, Menu, nativeImage } = require('electron');
+const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { worstUtilization, thresholdColor } = require('../shared/normalize');
+const { createTrayIconPng } = require('./tray-icon-buffer');
 
 const PROVIDER_LABELS = {
   'claude-ai': 'Claude',
@@ -13,22 +15,67 @@ const PROVIDER_LABELS = {
 
 const PROVIDER_ORDER = ['claude-ai', 'claude-code', 'gemini', 'perplexity', 'grok', 'cursor'];
 
-const STATUS_COLORS = {
-  green: '#22c55e',
-  amber: '#f59e0b',
-  red: '#ef4444',
-};
-
 let tray = null;
-let fallbackIcon = null;
+const iconCache = new Map();
+
+function assetsDir() {
+  return path.join(app.getAppPath(), 'assets');
+}
+
+function loadIconFromFile(level) {
+  const names = [
+    `tray-icon-${level}.png`,
+    level === 'green' ? 'tray-icon.png' : null,
+  ].filter(Boolean);
+
+  for (const name of names) {
+    const filePath = path.join(assetsDir(), name);
+    const hiDpiPath = filePath.replace('.png', '@2x.png');
+    if (!fs.existsSync(filePath)) continue;
+    const image = nativeImage.createFromPath(filePath);
+    if (image.isEmpty()) continue;
+    if (fs.existsSync(hiDpiPath)) {
+      const hi = nativeImage.createFromPath(hiDpiPath);
+      if (!hi.isEmpty()) {
+        image.addRepresentation({
+          scaleFactor: 2,
+          width: hi.getSize().width,
+          height: hi.getSize().height,
+          buffer: hi.toPNG(),
+        });
+      }
+    }
+    return image;
+  }
+  return null;
+}
+
+function loadIconFromBuffer(level) {
+  if (iconCache.has(level)) return iconCache.get(level);
+
+  const sizes = [16, 32];
+  const primary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[0]));
+  const secondary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[1]));
+  if (!primary.isEmpty() && !secondary.isEmpty()) {
+    primary.addRepresentation({
+      scaleFactor: 2,
+      width: sizes[1],
+      height: sizes[1],
+      buffer: secondary.toPNG(),
+    });
+  }
+
+  iconCache.set(level, primary);
+  return primary;
+}
 
 function createStatusIcon(level) {
-  const color = STATUS_COLORS[level] || STATUS_COLORS.green;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a0a0b"/><circle cx="8" cy="8" r="5" fill="${color}"/></svg>`;
-  const icon = nativeImage.createFromDataURL(
-    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-  );
-  return icon.isEmpty() ? fallbackIcon : icon.resize({ width: 16, height: 16 });
+  const fromFile = loadIconFromFile(level);
+  if (fromFile && !fromFile.isEmpty()) {
+    return fromFile;
+  }
+  const fromBuffer = loadIconFromBuffer(level);
+  return fromBuffer.isEmpty() ? loadIconFromBuffer('green') : fromBuffer;
 }
 
 function worstStatusLevel(snapshots, alertSettings) {
@@ -77,15 +124,8 @@ function buildContextMenu(handlers) {
 }
 
 function createTray(handlers) {
-  const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
-  let icon = nativeImage.createFromPath(iconPath);
-  if (icon.isEmpty()) {
-    icon = nativeImage.createFromBuffer(
-      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAADElEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
-    );
-  }
-  fallbackIcon = icon.resize({ width: 16, height: 16 });
-  tray = new Tray(fallbackIcon);
+  const icon = createStatusIcon('green');
+  tray = new Tray(icon);
   tray.setToolTip('API-Meter');
 
   tray.on('click', handlers.onShowPopover);
@@ -103,4 +143,4 @@ function createTray(handlers) {
   };
 }
 
-module.exports = { createTray, buildTooltip, worstStatusLevel };
+module.exports = { createTray, buildTooltip, worstStatusLevel, createStatusIcon };

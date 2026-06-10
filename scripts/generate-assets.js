@@ -19,6 +19,8 @@ const COLORS = {
   grok: [255, 255, 255, 255],
   cursor: [124, 58, 237, 255],
   green: [34, 197, 94, 255],
+  amber: [245, 158, 11, 255],
+  red: [239, 68, 68, 255],
 };
 
 // ── PNG encoder ──────────────────────────────────────────────
@@ -232,24 +234,23 @@ const DRAW = {
   },
 };
 
-function drawTrayIcon(ctx) {
+function drawTrayIcon(ctx, accent = COLORS.green) {
   const { w, h } = ctx;
   ctx.fill(COLORS.bg);
   const cx = w / 2;
-  const cy = h / 2 + 1;
-  const r = 5.5;
+  const cy = h / 2;
+  const r = w * 0.34;
+  const thickness = Math.max(1.8, w * 0.14);
   for (let a = 0; a < 270; a++) {
     const rad0 = ((a - 90) * Math.PI) / 180;
-    const rad1 = ((a - 89) * Math.PI) / 180;
-    const col = a < 200 ? COLORS.green : [...COLORS.green.slice(0, 3), 120];
+    const rad1 = ((a - 88) * Math.PI) / 180;
     ctx.line(
       cx + Math.cos(rad0) * r, cy + Math.sin(rad0) * r,
       cx + Math.cos(rad1) * r, cy + Math.sin(rad1) * r,
-      1.8, col
+      thickness, accent
     );
   }
-  ctx.fillCircle(cx, cy, 1.5, COLORS.green);
-  ctx.set(2, 2, [...COLORS.green.slice(0, 3), 180]);
+  ctx.fillCircle(cx, cy, Math.max(1.2, w * 0.1), accent);
 }
 
 function drawAppIcon(ctx) {
@@ -281,8 +282,17 @@ for (const id of Object.keys(DRAW)) {
   console.log('wrote', out);
 }
 
-writePng(path.join(ROOT, 'assets', 'tray-icon.png'), 16, 16, drawTrayIcon);
-console.log('wrote assets/tray-icon.png');
+for (const [name, color] of [
+  ['tray-icon.png', COLORS.green],
+  ['tray-icon-green.png', COLORS.green],
+  ['tray-icon-amber.png', COLORS.amber],
+  ['tray-icon-red.png', COLORS.red],
+]) {
+  const out = path.join(ROOT, 'assets', name);
+  writePng(out, 16, 16, (ctx) => drawTrayIcon(ctx, color));
+  writePng(out.replace('.png', '@2x.png'), 32, 32, (ctx) => drawTrayIcon(ctx, color));
+  console.log('wrote', out);
+}
 
 writePng(path.join(ROOT, 'assets', 'icon.png'), 256, 256, drawAppIcon);
 console.log('wrote assets/icon.png');

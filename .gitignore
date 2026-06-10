@@ -5,3 +5,6 @@ out/
 mcps/
 terminals/
 scripts/e2e-verify-electron-results.json
+
+# Terminal Paste Image folder
+.cp-images/
