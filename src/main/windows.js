@@ -44,6 +44,25 @@ function createPopoverWindow() {
   return win;
 }
 
+function createSettingsWindow() {
+  const win = new BrowserWindow({
+    width: 480,
+    height: 620,
+    show: false,
+    frame: false,
+    resizable: false,
+    backgroundColor: '#0a0a0b',
+    parent: undefined,
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  win.loadFile(path.join(__dirname, '../renderer/settings/index.html'));
+  return win;
+}
+
 function createFloatingWidget() {
   const win = new BrowserWindow({
     width: 280,
@@ -72,6 +91,14 @@ function positionNearTray(win) {
 }
 
 function showDashboard(getOrCreate) {
+  let win = getOrCreate();
+  if (win.isDestroyed()) win = getOrCreate(true);
+  if (!win.isVisible()) win.show();
+  win.focus();
+  return win;
+}
+
+function showSettings(getOrCreate) {
   let win = getOrCreate();
   if (win.isDestroyed()) win = getOrCreate(true);
   if (!win.isVisible()) win.show();
@@ -109,7 +136,9 @@ module.exports = {
   createDashboardWindow,
   createPopoverWindow,
   createFloatingWidget,
+  createSettingsWindow,
   showDashboard,
   showPopover,
+  showSettings,
   toggleFloatingWidget,
 };

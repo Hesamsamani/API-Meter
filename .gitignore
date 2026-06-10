@@ -2,3 +2,6 @@ node_modules/
 dist/
 out/
 *.log
+mcps/
+terminals/
+scripts/e2e-verify-electron-results.json

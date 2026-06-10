@@ -80,7 +80,10 @@ function createGeminiAdapter() {
         title: 'Login to Gemini',
       });
     },
-    async logout() {},
+    async logout() {
+      const { setSecret } = require('../main/store');
+      setSecret('gemini-session', '');
+    },
     async fetchUsage() {
       try {
         return await fetchLiveGemini();

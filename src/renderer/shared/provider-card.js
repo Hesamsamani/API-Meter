@@ -69,10 +69,15 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   const gaugeSize = variant === 'mini' ? 64 : 88;
   const gaugeStroke = variant === 'mini' ? 5 : 6;
 
+  const planLabel = snapshot.plan || 'Unknown';
+
   el.innerHTML = `
     <div class="card-header">
       ${providerLogoHtml(meta, snapshot?.providerId)}
-      <span class="card-title">${meta.label}</span>
+      <div class="card-title-block">
+        <span class="card-title">${meta.label}</span>
+        <span class="card-plan">${planLabel}</span>
+      </div>
       <div class="card-status ${snapshot.source}"></div>
     </div>
     <div class="gauge-wrap"></div>
@@ -98,7 +103,10 @@ function buildEmptyCard(meta, snapshot, onLogin) {
   return `
     <div class="card-header">
       ${providerLogoHtml(meta, snapshot?.providerId)}
-      <span class="card-title">${meta.label}</span>
+      <div class="card-title-block">
+        <span class="card-title">${meta.label}</span>
+        <span class="card-plan">${snapshot?.plan || '—'}</span>
+      </div>
       <div class="card-status stale"></div>
     </div>
     <div class="card-empty">
@@ -118,9 +126,11 @@ export function updateProviderCard(el, snapshot, { onLogin } = {}) {
     const stats = fresh.querySelector('.stats');
     const badge = fresh.querySelector('.badge');
     const status = fresh.querySelector('.card-status');
+    const plan = fresh.querySelector('.card-plan');
     if (stats) el.querySelector('.stats')?.replaceWith(stats);
     if (badge) el.querySelector('.badge')?.replaceWith(badge);
     if (status) el.querySelector('.card-status')?.replaceWith(status);
+    if (plan) el.querySelector('.card-plan')?.replaceWith(plan);
     return el;
   }
   el.replaceWith(fresh);

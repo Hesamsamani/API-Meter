@@ -4,6 +4,7 @@ const { safeStorage } = require('electron');
 const settings = new Store({
   defaults: {
     refreshIntervalMinutes: 5,
+    autoRefreshEnabled: true,
     theme: 'dark',
     launchAtStartup: false,
     floatingWidget: { enabled: false, pinnedProviders: [], autoRotate: false },

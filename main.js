@@ -10,8 +10,10 @@ const {
   createDashboardWindow,
   createPopoverWindow,
   createFloatingWidget,
+  createSettingsWindow,
   showDashboard,
   showPopover,
+  showSettings,
   toggleFloatingWidget,
 } = require('./src/main/windows');
 
@@ -23,6 +25,7 @@ let trayApi;
 let dashboardWin = null;
 let popoverWin = null;
 let floatingWin = null;
+let settingsWin = null;
 
 function broadcastUsage() {
   const payload = store.getAll();
@@ -31,7 +34,7 @@ function broadcastUsage() {
       win.webContents.send('usage:updated', payload);
     }
   }
-  trayApi?.update(payload);
+  trayApi?.update(payload, settings.get('alerts'));
   evaluateAlerts(payload);
 }
 
@@ -41,6 +44,25 @@ function evaluateAlerts(snapshots) {
   for (const snap of Object.values(snapshots)) {
     for (const w of snap.windows || []) {
       alertManager.evaluate(snap.providerId, w.key, w.utilization);
+    }
+  }
+}
+
+function applySettingsPatch(patch) {
+  for (const [key, value] of Object.entries(patch)) {
+    settings.set(key, value);
+  }
+  alertManager.warn = settings.get('alerts.warnThreshold');
+  alertManager.danger = settings.get('alerts.dangerThreshold');
+  scheduler.restart();
+  broadcastSettings();
+}
+
+function broadcastSettings() {
+  const payload = settings.store;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('settings:updated', payload);
     }
   }
 }
@@ -56,10 +78,22 @@ function registerIpc() {
     const adapter = registry.get(id);
     if (!adapter?.login) throw new Error(`Provider ${id} has no login flow`);
     await adapter.login();
-    await scheduler.refreshProvider(adapter);
+    await scheduler.refreshProviderAndReschedule(adapter);
+    return store.getAll();
+  });
+  ipcMain.handle('provider:logout', async (_e, id) => {
+    const adapter = registry.get(id);
+    if (!adapter?.logout) throw new Error(`Provider ${id} has no logout flow`);
+    await adapter.logout();
+    store.setError(id, 'Disconnected');
+    broadcastUsage();
     return store.getAll();
   });
   ipcMain.handle('settings:get', () => settings.store);
+  ipcMain.handle('settings:update', (_e, patch) => {
+    applySettingsPatch(patch || {});
+    return settings.store;
+  });
 
   ipcMain.on('window:minimize', (e) => {
     BrowserWindow.fromWebContents(e.sender)?.minimize();
@@ -71,6 +105,10 @@ function registerIpc() {
   ipcMain.handle('app:showDashboard', () => {
     if (popoverWin && !popoverWin.isDestroyed()) popoverWin.hide();
     showDashboard(getDashboardWin);
+  });
+
+  ipcMain.handle('app:showSettings', () => {
+    showSettings(getSettingsWin);
   });
 
   ipcMain.handle('app:toggleWidget', () => {
@@ -100,6 +138,13 @@ function getPopoverWin(recreate = false) {
   return popoverWin;
 }
 
+function getSettingsWin(recreate = false) {
+  if (recreate || !settingsWin || settingsWin.isDestroyed()) {
+    settingsWin = createSettingsWindow();
+  }
+  return settingsWin;
+}
+
 app.whenReady().then(() => {
   registry = createRegistry();
   store = new UsageStore();
@@ -118,6 +163,7 @@ app.whenReady().then(() => {
   scheduler = new CollectorScheduler({
     registry,
     store,
+    settings,
     onUpdate: broadcastUsage,
   });
   scheduler.start();
@@ -134,6 +180,22 @@ app.whenReady().then(() => {
         },
         settings,
       });
+    },
+    onSettings: () => showSettings(getSettingsWin),
+    onProviderLogin: async (id) => {
+      const adapter = registry.get(id);
+      if (adapter?.login) {
+        await adapter.login();
+        await scheduler.refreshProviderAndReschedule(adapter);
+      }
+    },
+    onProviderLogout: async (id) => {
+      const adapter = registry.get(id);
+      if (adapter?.logout) {
+        await adapter.logout();
+        store.setError(id, 'Disconnected');
+        broadcastUsage();
+      }
     },
     onQuit: () => app.quit(),
     onShowPopover: () => showPopover(getPopoverWin),

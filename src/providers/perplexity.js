@@ -55,7 +55,10 @@ function createPerplexityAdapter() {
         title: 'Login to Perplexity',
       });
     },
-    async logout() {},
+    async logout() {
+      const { setSecret } = require('../main/store');
+      setSecret('perplexity-session', '');
+    },
     async fetchUsage() {
       const { fetchViaWindow } = require('../main/fetch-via-window');
       await ensurePerplexityCookies();

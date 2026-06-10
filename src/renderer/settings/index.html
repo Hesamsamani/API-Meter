@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'">
+  <title>API-Meter Settings</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="settings-shell">
+    <header class="titlebar">
+      <div class="titlebar-brand">
+        <span class="dot"></span>
+        Settings
+      </div>
+      <div class="titlebar-actions">
+        <button class="titlebar-btn close" id="btn-close" title="Close">✕</button>
+      </div>
+    </header>
+
+    <form class="settings-body" id="settings-form">
+      <section class="settings-section">
+        <h2>Telemetry</h2>
+        <label class="field-row">
+          <span>Refresh interval (minutes)</span>
+          <input type="number" id="refresh-interval" min="1" max="60" step="1">
+        </label>
+        <label class="field-check">
+          <input type="checkbox" id="auto-refresh">
+          <span>Auto-refresh enabled</span>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h2>Alerts</h2>
+        <label class="field-check">
+          <input type="checkbox" id="alerts-enabled">
+          <span>Desktop notifications</span>
+        </label>
+        <label class="field-row">
+          <span>Warn threshold (%)</span>
+          <input type="number" id="warn-threshold" min="1" max="99" step="1">
+        </label>
+        <label class="field-row">
+          <span>Danger threshold (%)</span>
+          <input type="number" id="danger-threshold" min="1" max="100" step="1">
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h2>Floating Widget</h2>
+        <label class="field-check">
+          <input type="checkbox" id="widget-auto-rotate">
+          <span>Auto-rotate providers (10s)</span>
+        </label>
+        <p class="field-hint">Pin providers from the dashboard detail panel in a future update. Toggle widget from tray.</p>
+      </section>
+
+      <section class="settings-section">
+        <h2>Providers</h2>
+        <div class="provider-toggles" id="provider-toggles"></div>
+      </section>
+
+      <div class="settings-actions">
+        <button type="submit" class="btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

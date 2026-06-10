@@ -14,6 +14,8 @@ const detailTitle = document.getElementById('detail-title');
 const detailBody = document.getElementById('detail-body');
 const statusLine = document.getElementById('status-line');
 const btnRefresh = document.getElementById('btn-refresh');
+const btnAutoRefresh = document.getElementById('btn-auto-refresh');
+const btnSettings = document.getElementById('btn-settings');
 const btnMinimize = document.getElementById('btn-minimize');
 const btnClose = document.getElementById('btn-close');
 const btnDetailClose = document.getElementById('detail-close');
@@ -22,6 +24,8 @@ let snapshots = {};
 let selectedId = null;
 let chart = null;
 let unsubscribe = null;
+let unsubscribeSettings = null;
+let appSettings = { autoRefreshEnabled: true };
 
 function showSkeletons() {
   grid.replaceChildren(...ORDER.map(() => renderSkeletonCard()));
@@ -37,6 +41,20 @@ function handleLogin(providerId) {
   window.apiMeter.loginProvider(providerId).catch((err) => {
     console.error('Login failed:', err);
   });
+}
+
+function handleLogout(providerId) {
+  window.apiMeter.logoutProvider(providerId).catch((err) => {
+    console.error('Disconnect failed:', err);
+  });
+}
+
+function syncAutoRefreshButton() {
+  if (!btnAutoRefresh) return;
+  const on = appSettings.autoRefreshEnabled !== false;
+  btnAutoRefresh.classList.toggle('active', on);
+  btnAutoRefresh.setAttribute('aria-pressed', String(on));
+  btnAutoRefresh.title = on ? 'Auto-refresh on' : 'Auto-refresh off';
 }
 
 function renderGrid(data) {
@@ -116,6 +134,7 @@ async function refreshDetail(snapshot) {
     <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
     <div class="detail-actions">
       ${isLoginRequired(snapshot) || snapshot.error ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+      ${!isLoginRequired(snapshot) && snapshot.windows?.length ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
       <button type="button" id="detail-refresh">Refresh</button>
     </div>
   `;
@@ -125,6 +144,9 @@ async function refreshDetail(snapshot) {
   });
   document.getElementById('detail-login')?.addEventListener('click', () => {
     handleLogin(snapshot.providerId);
+  });
+  document.getElementById('detail-disconnect')?.addEventListener('click', () => {
+    handleLogout(snapshot.providerId);
   });
 
   await renderHistoryChart(snapshot.providerId);
@@ -190,6 +212,12 @@ async function init() {
   btnMinimize?.addEventListener('click', () => window.apiMeter.minimizeWindow());
   btnClose?.addEventListener('click', () => window.apiMeter.closeWindow());
   btnDetailClose?.addEventListener('click', closeDetail);
+  btnSettings?.addEventListener('click', () => window.apiMeter.openSettings());
+  btnAutoRefresh?.addEventListener('click', async () => {
+    const next = appSettings.autoRefreshEnabled === false;
+    appSettings = await window.apiMeter.updateSettings({ autoRefreshEnabled: next });
+    syncAutoRefreshButton();
+  });
   btnRefresh?.addEventListener('click', async () => {
     btnRefresh.classList.add('spinning');
     try { await window.apiMeter.refreshAll(); } finally {
@@ -198,6 +226,8 @@ async function init() {
   });
 
   try {
+    appSettings = await window.apiMeter.getSettings();
+    syncAutoRefreshButton();
     const data = await window.apiMeter.getUsage();
     renderGrid(data);
   } catch (err) {
@@ -205,6 +235,10 @@ async function init() {
   }
 
   unsubscribe = window.apiMeter.onUsageUpdated((data) => renderGrid(data));
+  unsubscribeSettings = window.apiMeter.onSettingsUpdated((data) => {
+    appSettings = data;
+    syncAutoRefreshButton();
+  });
 }
 
 init();
