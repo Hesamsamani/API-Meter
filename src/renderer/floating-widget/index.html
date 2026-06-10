@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'">
+  <title>API-Meter Widget</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    html, body { background: transparent; }
+  </style>
+</head>
+<body>
+  <div class="widget">
+    <header class="widget-header">
+      <span>API-Meter</span>
+      <button class="widget-close" id="widget-close" type="button">✕</button>
+    </header>
+    <div class="widget-body" id="widget-body"></div>
+    <div class="widget-dots" id="widget-dots"></div>
+  </div>
+  <script type="module" src="widget.js"></script>
+</body>
+</html>
