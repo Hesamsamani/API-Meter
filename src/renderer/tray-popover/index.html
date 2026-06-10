@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'">
+  <title>API-Meter</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="popover">
+    <header class="popover-header">
+      <h2>Usage Snapshot</h2>
+    </header>
+    <div class="popover-body" id="popover-cards"></div>
+    <footer class="popover-footer">
+      <button type="button" id="btn-open-dashboard">Open Dashboard</button>
+    </footer>
+  </div>
+  <script type="module" src="popover.js"></script>
+</body>
+</html>
