@@ -1,3 +1,5 @@
+const { appendHistory } = require('./store');
+
 class CollectorScheduler {
   /**
    * @param {{ registry: { list(): any[] }, store: import('./usage-store').UsageStore, onUpdate?: () => void }} deps
@@ -15,6 +17,10 @@ class CollectorScheduler {
       const snap = await adapter.fetchUsage();
       snap.plan = adapter.detectPlan(snap) || snap.plan;
       this.store.setLive(adapter.id, snap);
+      appendHistory(adapter.id, {
+        timestamp: Date.now(),
+        windows: Object.fromEntries(snap.windows.map((w) => [w.key, w.utilization])),
+      });
       this.backoff.set(adapter.id, 120000);
     } catch (err) {
       this.store.setError(adapter.id, err.message || String(err));
