@@ -80,7 +80,7 @@ function extractGeminiQuota(inner) {
 }
 
 async function fetchLiveGemini() {
-  const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
+  const { getProviderSession, setCookies, flushCookies, syncElectronCookiesToPartition } = require('../main/provider-session');
   const sid = getSecret('gemini-session');
   if (!sid) throw new Error('Gemini login required');
   const cookieName = getSecret('gemini-session-cookie-name') || '__Secure-1PSID';
@@ -95,16 +95,12 @@ async function fetchLiveGemini() {
       secure: true,
       sameSite: 'no_restriction',
     },
-    {
-      url: 'https://gemini.google.com',
-      name: '__Secure-1PSID',
-      value: sid,
-      domain: '.google.com',
-      path: '/',
-      secure: true,
-      sameSite: 'no_restriction',
-    },
   ]);
+  await syncElectronCookiesToPartition({
+    loginUrl: 'https://gemini.google.com/',
+    domain: '.google.com',
+    cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
+  });
   await flushCookies(ses);
   const raw = await fetchViaWindow(
     'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
@@ -150,8 +146,13 @@ function createGeminiAdapter() {
     },
     async logout() {
       const { setSecret, setProviderDisconnected } = require('../main/store');
+      const { clearProviderCookies } = require('../main/provider-session');
       setSecret('gemini-session', '');
       setSecret('gemini-session-cookie-name', '');
+      await clearProviderCookies({
+        domain: '.google.com',
+        names: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
+      });
       setProviderDisconnected('gemini', true);
     },
     async fetchUsage() {

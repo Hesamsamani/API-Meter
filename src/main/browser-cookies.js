@@ -109,7 +109,7 @@ function readCookieFromDb(cookiesPath, localStatePath, { cookieNames, domain }) 
     const suffix = hostSuffix(domain);
     const namePlaceholders = names.map(() => '?').join(', ');
     const rows = db.prepare(
-      `SELECT name, value, encrypted_value, host_key
+      `SELECT name, value, encrypted_value, host_key, last_access_utc
        FROM cookies
        WHERE name IN (${namePlaceholders})
          AND (
@@ -137,9 +137,15 @@ function readCookieFromDb(cookiesPath, localStatePath, { cookieNames, domain }) 
   }
 }
 
+function browserOrder(preferredId) {
+  if (!preferredId) return CHROMIUM_BROWSERS;
+  const preferred = CHROMIUM_BROWSERS.find((b) => b.id === preferredId);
+  if (!preferred) return CHROMIUM_BROWSERS;
+  return [preferred, ...CHROMIUM_BROWSERS.filter((b) => b.id !== preferredId)];
+}
+
 /**
  * Diagnose why browser cookie auto-detect failed.
- * @returns {{ reason: 'unsupported_platform'|'db_locked'|'v20_encrypted'|'not_found'|'read_failed' }}
  */
 function diagnoseBrowserCookie(opts) {
   if (process.platform !== 'win32') return { reason: 'unsupported_platform' };
@@ -148,7 +154,7 @@ function diagnoseBrowserCookie(opts) {
   let sawV20 = false;
   let sawLocked = false;
 
-  for (const browser of CHROMIUM_BROWSERS) {
+  for (const browser of browserOrder(opts.preferredBrowser)) {
     for (const profile of listProfiles(browser.dir)) {
       const { hit, issue } = readCookieFromDb(profile.cookiesPath, profile.localStatePath, {
         cookieNames,
@@ -170,7 +176,7 @@ function diagnoseBrowserCookie(opts) {
  */
 function readBrowserCookie(opts) {
   const cookieNames = opts.cookieNames || opts.cookieName;
-  for (const browser of CHROMIUM_BROWSERS) {
+  for (const browser of browserOrder(opts.preferredBrowser)) {
     for (const profile of listProfiles(browser.dir)) {
       const { hit } = readCookieFromDb(profile.cookiesPath, profile.localStatePath, {
         cookieNames,
@@ -192,4 +198,5 @@ module.exports = {
   getChromiumKey,
   hostSuffix,
   CHROMIUM_BROWSERS,
+  browserOrder,
 };

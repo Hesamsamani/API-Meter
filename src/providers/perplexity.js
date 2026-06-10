@@ -24,7 +24,7 @@ function mapPerplexityRateLimits(body) {
 
 async function ensurePerplexityCookies() {
   const { getSecret } = require('../main/store');
-  const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
+  const { getProviderSession, setCookies, flushCookies, clearProviderCookies } = require('../main/provider-session');
   const token = getSecret('perplexity-session');
   if (!token) throw new Error('Perplexity login required');
   const cookieName = getSecret('perplexity-session-cookie-name') || 'pplx.session';
@@ -68,6 +68,10 @@ function createPerplexityAdapter() {
       const { setSecret } = require('../main/store');
       setSecret('perplexity-session', '');
       setSecret('perplexity-session-cookie-name', '');
+      await clearProviderCookies({
+        domain: '.perplexity.ai',
+        names: ['pplx.session', '__Secure-next-auth.session-token'],
+      });
       setProviderDisconnected('perplexity', true);
     },
     async fetchUsage() {

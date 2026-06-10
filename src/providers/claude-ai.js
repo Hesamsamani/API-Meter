@@ -1,7 +1,7 @@
 const { fetchViaWindow } = require('../main/fetch-via-window');
 const { openAuthWindow } = require('../main/auth-window');
 const { getSecret, setSecret, isProviderDisconnected, setProviderDisconnected } = require('../main/store');
-const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
+const { getProviderSession, setCookies, flushCookies, clearProviderCookies } = require('../main/provider-session');
 const { clampPercent } = require('../shared/normalize');
 
 function mapUsage(body) {
@@ -81,7 +81,7 @@ function createClaudeAiAdapter() {
       await openAuthWindow({
         loginUrl: 'https://claude.ai/login',
         domain: '.claude.ai',
-        cookieNames: ['sessionKey', 'anthropic-session'],
+        cookieNames: ['anthropic-session', 'sessionKey'],
         secretKey: 'claude-ai-session',
         title: 'Login to Claude.ai',
       });
@@ -89,6 +89,10 @@ function createClaudeAiAdapter() {
     async logout() {
       setSecret('claude-ai-session', '');
       setSecret('claude-ai-session-cookie-name', '');
+      await clearProviderCookies({
+        domain: '.claude.ai',
+        names: ['anthropic-session', 'sessionKey'],
+      });
       setProviderDisconnected('claude-ai', true);
     },
     async fetchUsage() {

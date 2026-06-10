@@ -93,9 +93,18 @@ function registerIpc() {
   ipcMain.handle('provider:login', async (_e, id) => {
     const adapter = registry.get(id);
     if (!adapter?.login) throw new Error(`Provider ${id} has no login flow`);
-    await adapter.login();
-    await scheduler.refreshProviderAndReschedule(adapter);
-    return store.getAll();
+    try {
+      await adapter.login();
+      await scheduler.refreshProviderAndReschedule(adapter);
+      broadcastUsage();
+      return store.getAll();
+    } catch (err) {
+      const message = err.message || String(err);
+      if (!/cancel/i.test(message) && Notification.isSupported()) {
+        new Notification({ title: 'Login failed', body: message }).show();
+      }
+      throw err;
+    }
   });
   ipcMain.handle('provider:logout', async (_e, id) => {
     const adapter = registry.get(id);

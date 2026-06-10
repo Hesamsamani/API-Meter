@@ -3,25 +3,31 @@
  */
 const { BrowserWindow } = require('electron');
 const { CHROME_UA } = require('../shared/ua');
-const { PARTITION, getProviderSession } = require('./provider-session');
+const { PARTITION } = require('./provider-session');
 
 const BLOCKED_SIGNATURES = [
   { pattern: 'Just a moment', error: 'CloudflareBlocked' },
   { pattern: 'Enable JavaScript and cookies to continue', error: 'CloudflareChallenge' },
-  { pattern: '<html', error: 'UnexpectedHTML' },
 ];
 
+const BENIGN_FAIL_CODES = new Set([-3, -27]);
+
 function parseResponseBody(bodyText) {
-  for (const sig of BLOCKED_SIGNATURES) {
-    if (bodyText.includes(sig.pattern)) {
-      throw new Error(`${sig.error}: ${bodyText.substring(0, 200)}`);
-    }
-  }
+  const trimmed = String(bodyText || '').trim();
+  if (!trimmed) throw new Error('InvalidJSON: empty response');
 
   try {
-    return JSON.parse(bodyText);
+    return JSON.parse(trimmed);
   } catch {
-    throw new Error('InvalidJSON: ' + bodyText.substring(0, 200));
+    for (const sig of BLOCKED_SIGNATURES) {
+      if (trimmed.includes(sig.pattern)) {
+        throw new Error(`${sig.error}: ${trimmed.substring(0, 200)}`);
+      }
+    }
+    if (/<html/i.test(trimmed)) {
+      throw new Error(`UnexpectedHTML: ${trimmed.substring(0, 200)}`);
+    }
+    throw new Error('InvalidJSON: ' + trimmed.substring(0, 200));
   }
 }
 
@@ -47,7 +53,7 @@ function urlLooksReady(currentUrl, targetUrl) {
     const target = new URL(targetUrl);
     return current.hostname === target.hostname;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -92,7 +98,8 @@ function fetchViaWindow(url, { timeoutMs = 30000, expectJson = true, partition =
     };
 
     win.webContents.on('did-stop-loading', handleStop);
-    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || BENIGN_FAIL_CODES.has(errorCode)) return;
       finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
     });
 
@@ -154,7 +161,8 @@ function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, pa
       }
     });
 
-    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || BENIGN_FAIL_CODES.has(errorCode)) return;
       finish(reject, new Error(`LoadFailed at URL ${currentIndex}: ${errorCode} ${errorDescription}`));
     });
 
@@ -167,5 +175,4 @@ module.exports = {
   fetchMultipleViaWindow,
   parseResponseBody,
   createFetchWindow,
-  getProviderSession,
 };
