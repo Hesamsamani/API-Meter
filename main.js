@@ -1,5 +1,11 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const { createRegistry } = require('./src/providers/registry');
+const { UsageStore } = require('./src/main/usage-store');
+const { CollectorScheduler } = require('./src/main/scheduler');
+
+let store;
+let scheduler;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -17,6 +23,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  store = new UsageStore();
+  scheduler = new CollectorScheduler({
+    registry: createRegistry(),
+    store,
+    onUpdate: () => { /* IPC broadcast added in Task 8 */ },
+  });
+  scheduler.start();
   createWindow();
 });
 
