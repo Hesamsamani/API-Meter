@@ -36,22 +36,84 @@ function mapLocalGemini(sessionsToday) {
   };
 }
 
+function parseGeminiBatchExecute(bodyText) {
+  const cleaned = String(bodyText || '').replace(/^\)\]\}'\s*/, '').trim();
+  const outer = JSON.parse(cleaned);
+  if (!Array.isArray(outer)) throw new Error('Gemini batchexecute: unexpected payload');
+
+  for (const row of outer) {
+    if (!Array.isArray(row) || row.length < 3) continue;
+    const payload = row[2];
+    if (typeof payload !== 'string') continue;
+    try {
+      const inner = JSON.parse(payload);
+      if (Array.isArray(inner)) return inner;
+      if (inner && typeof inner === 'object') return inner;
+    } catch {
+      /* try next row */
+    }
+  }
+  throw new Error('Gemini batchexecute: quota data not found');
+}
+
+function extractGeminiQuota(inner) {
+  const walk = (node) => {
+    if (!node) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = walk(item);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node === 'object') {
+      if (Number.isFinite(node.dayUsed) || Number.isFinite(node.dayLimit)) return node;
+      if (node.quota) return node.quota;
+      for (const value of Object.values(node)) {
+        const hit = walk(value);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+  return walk(inner) || {};
+}
+
 async function fetchLiveGemini() {
-  const { session } = require('electron');
+  const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
   const sid = getSecret('gemini-session');
   if (!sid) throw new Error('Gemini login required');
   const cookieName = getSecret('gemini-session-cookie-name') || '__Secure-1PSID';
-  await session.defaultSession.cookies.set({
-    url: 'https://gemini.google.com',
-    name: cookieName,
-    value: sid,
-    domain: '.google.com',
-    path: '/',
-    secure: true,
-  });
-  const body = await fetchViaWindow('https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b');
-  const dayUsed = Number(body?.dayUsed || body?.quota?.dayUsed || 0);
-  const dayLimit = Number(body?.dayLimit || body?.quota?.dayLimit || AI_PRO_DAILY_LIMIT);
+  const ses = getProviderSession();
+  await setCookies(ses, [
+    {
+      url: 'https://gemini.google.com',
+      name: cookieName,
+      value: sid,
+      domain: '.google.com',
+      path: '/',
+      secure: true,
+      sameSite: 'no_restriction',
+    },
+    {
+      url: 'https://gemini.google.com',
+      name: '__Secure-1PSID',
+      value: sid,
+      domain: '.google.com',
+      path: '/',
+      secure: true,
+      sameSite: 'no_restriction',
+    },
+  ]);
+  await flushCookies(ses);
+  const raw = await fetchViaWindow(
+    'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
+    { expectJson: false },
+  );
+  const inner = parseGeminiBatchExecute(raw);
+  const quota = extractGeminiQuota(inner);
+  const dayUsed = Number(quota.dayUsed ?? quota.used ?? 0);
+  const dayLimit = Number(quota.dayLimit ?? quota.limit ?? AI_PRO_DAILY_LIMIT);
   return {
     providerId: 'gemini',
     source: 'live',
@@ -72,8 +134,12 @@ function createGeminiAdapter() {
     name: 'GEMINI',
     authMethod: 'browser',
     async isAvailable() { return true; },
-    async isAuthenticated() { return !!getSecret('gemini-session') || fs.existsSync(geminiTmpPath()); },
+    async isAuthenticated() {
+      return !!getSecret('gemini-session');
+    },
     async login() {
+      const { setProviderDisconnected } = require('../main/store');
+      setProviderDisconnected('gemini', false);
       await openAuthWindow({
         loginUrl: 'https://gemini.google.com/',
         domain: '.google.com',
@@ -83,11 +149,15 @@ function createGeminiAdapter() {
       });
     },
     async logout() {
-      const { setSecret } = require('../main/store');
+      const { setSecret, setProviderDisconnected } = require('../main/store');
       setSecret('gemini-session', '');
       setSecret('gemini-session-cookie-name', '');
+      setProviderDisconnected('gemini', true);
     },
     async fetchUsage() {
+      const { isProviderDisconnected } = require('../main/store');
+      if (isProviderDisconnected('gemini')) throw new Error('Gemini disconnected');
+      if (!getSecret('gemini-session')) throw new Error('Gemini login required');
       try {
         return await fetchLiveGemini();
       } catch (err) {
@@ -100,4 +170,4 @@ function createGeminiAdapter() {
   };
 }
 
-module.exports = { createGeminiAdapter, mapLocalGemini, countTodaySessions };
+module.exports = { createGeminiAdapter, parseGeminiBatchExecute, extractGeminiQuota, mapLocalGemini };

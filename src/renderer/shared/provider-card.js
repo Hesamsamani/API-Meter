@@ -41,14 +41,23 @@ function formatCountdown(resetsAt) {
   return `${h}h ${m}m`;
 }
 
+const AUTH_HINTS = [
+  /login/i, /auth/i, /session/i, /credential/i, /cloudflare/i,
+  /unauthorized/i, /\b401\b/, /\b403\b/, /not logged/i, /expired/i,
+  /disconnected/i, /org not found/i, /invalidjson/i,
+];
+
 function isLoginRequired(snapshot) {
   if (!snapshot) return false;
-  const msg = (snapshot.error || '').toLowerCase();
-  return msg.includes('login') || msg.includes('auth') || msg.includes('session') || msg.includes('credential');
+  if (snapshot.authRequired) return true;
+  const msg = snapshot.error || '';
+  return AUTH_HINTS.some((re) => re.test(msg));
 }
 
 function sourceBadge(snapshot) {
+  if (isLoginRequired(snapshot)) return { text: 'LOGIN', cls: 'error' };
   if (snapshot.error && !snapshot.windows?.length) return { text: 'ERROR', cls: 'error' };
+  if (snapshot.error && snapshot.windows?.length) return { text: 'STALE', cls: 'stale' };
   if (snapshot.source === 'local') return { text: 'LOCAL', cls: 'local' };
   if (snapshot.source === 'stale') return { text: 'STALE', cls: 'stale' };
   return { text: 'LIVE', cls: 'live' };
@@ -61,8 +70,18 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   el.style.setProperty('--accent', meta.accent);
   el.dataset.providerId = snapshot?.providerId || '';
 
-  if (!snapshot || (isLoginRequired(snapshot) && !snapshot.windows?.length)) {
+  const showEmpty = !snapshot
+    || (isLoginRequired(snapshot) && !snapshot.windows?.length)
+    || (!snapshot.windows?.length && snapshot.error);
+
+  if (showEmpty) {
     el.innerHTML = buildEmptyCard(meta, snapshot, onLogin);
+    if (isLoginRequired(snapshot) && onLogin) {
+      el.querySelector('.login-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onLogin();
+      });
+    }
     return el;
   }
 
@@ -155,7 +174,7 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
   el.dataset.providerId = snapshot?.providerId || '';
 
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
-  const needsLogin = isLoginRequired(snapshot) && !hasWindows;
+  const needsLogin = isLoginRequired(snapshot);
   const util = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const colorClass = hasWindows ? thresholdClass(util) : 'muted';
@@ -184,6 +203,7 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
 
   if (needsLogin && onLogin) {
     el.classList.add('snapshot-row--clickable');
+    el.title = snapshot?.error || 'Click to reconnect';
     el.addEventListener('click', onLogin);
   }
 

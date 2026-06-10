@@ -1,36 +1,16 @@
 /**
- * fetch-via-window.js
- *
- * Fetches JSON from a URL using a hidden BrowserWindow.
- *
- * Why this exists:
- * Claude.ai uses Cloudflare protection and detects Electron's default
- * request headers, blocking standard Node.js fetch/http requests.
- * By loading the URL in a hidden BrowserWindow with a spoofed Chrome
- * User-Agent, we ride on the browser session cookies and bypass
- * Cloudflare's bot detection. This is the simplest reliable approach
- * after the previous cookie-database-reading strategy proved too
- * fragile and OS-specific.
+ * Fetches content from a URL using a hidden BrowserWindow with a Chrome User-Agent.
  */
 const { BrowserWindow } = require('electron');
+const { CHROME_UA } = require('../shared/ua');
+const { PARTITION, getProviderSession } = require('./provider-session');
 
-/**
- * Known error signatures returned when Claude.ai blocks or changes behaviour.
- * If the extracted body matches one of these patterns we throw a specific error
- * so callers can react (e.g. prompt re-login).
- */
 const BLOCKED_SIGNATURES = [
   { pattern: 'Just a moment', error: 'CloudflareBlocked' },
   { pattern: 'Enable JavaScript and cookies to continue', error: 'CloudflareChallenge' },
   { pattern: '<html', error: 'UnexpectedHTML' },
 ];
 
-/**
- * Parse and validate response body text
- * @param {string} bodyText - Raw body text from the page
- * @returns {Object} Parsed JSON data
- * @throws {Error} If blocked signatures detected or JSON parsing fails
- */
 function parseResponseBody(bodyText) {
   for (const sig of BLOCKED_SIGNATURES) {
     if (bodyText.includes(sig.pattern)) {
@@ -40,140 +20,152 @@ function parseResponseBody(bodyText) {
 
   try {
     return JSON.parse(bodyText);
-  } catch (parseErr) {
+  } catch {
     throw new Error('InvalidJSON: ' + bodyText.substring(0, 200));
   }
 }
 
+function createFetchWindow({ partition = PARTITION } = {}) {
+  const win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    show: false,
+    webPreferences: {
+      partition,
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  win.webContents.setUserAgent(CHROME_UA);
+  return win;
+}
+
+function urlLooksReady(currentUrl, targetUrl) {
+  if (!currentUrl || currentUrl === 'about:blank') return false;
+  try {
+    const current = new URL(currentUrl);
+    const target = new URL(targetUrl);
+    return current.hostname === target.hostname;
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Fetch a single URL using a dedicated BrowserWindow (legacy single-call approach)
- * @param {string} url - URL to fetch
- * @param {Object} options - Options object
- * @param {number} options.timeoutMs - Request timeout in milliseconds (default: 30000)
- * @returns {Promise<Object>} Parsed JSON response
+ * @param {string} url
+ * @param {{ timeoutMs?: number, expectJson?: boolean, partition?: string }} [options]
  */
-function fetchViaWindow(url, { timeoutMs = 30000 } = {}) {
+function fetchViaWindow(url, { timeoutMs = 30000, expectJson = true, partition = PARTITION } = {}) {
   return new Promise((resolve, reject) => {
-    const win = new BrowserWindow({
-      width: 800,
-      height: 600,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
+    const win = createFetchWindow({ partition });
+    let settled = false;
 
-    const timeout = setTimeout(() => {
-      win.close();
-      reject(new Error('Request timeout'));
-    }, timeoutMs);
-
-    win.webContents.on('did-finish-load', async () => {
-      try {
-        const bodyText = await win.webContents.executeJavaScript(
-          'document.body.innerText || document.body.textContent'
-        );
-        clearTimeout(timeout);
-        win.close();
-
-        const data = parseResponseBody(bodyText);
-        resolve(data);
-      } catch (err) {
-        clearTimeout(timeout);
-        win.close();
-        reject(err);
-      }
-    });
-
-    win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
-      win.close();
-      reject(new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
+      if (!win.isDestroyed()) win.close();
+      fn(value);
+    };
+
+    const timeout = setTimeout(() => finish(reject, new Error('Request timeout')), timeoutMs);
+
+    const handleStop = async () => {
+      try {
+        if (win.isDestroyed() || win.webContents.isLoading()) return;
+        const currentUrl = win.webContents.getURL();
+        if (!urlLooksReady(currentUrl, url)) return;
+
+        const bodyText = await win.webContents.executeJavaScript(
+          'document.body?.innerText || document.body?.textContent || ""',
+        );
+        if (!String(bodyText || '').trim()) return;
+
+        if (expectJson) {
+          finish(resolve, parseResponseBody(bodyText));
+        } else {
+          finish(resolve, String(bodyText));
+        }
+      } catch (err) {
+        finish(reject, err);
+      }
+    };
+
+    win.webContents.on('did-stop-loading', handleStop);
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+      finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
     });
 
     win.loadURL(url);
   });
 }
 
-/**
- * Fetch multiple URLs sequentially using a single reused BrowserWindow
- * This reduces memory overhead by avoiding repeated window creation/destruction
- *
- * @param {string[]} urls - Array of URLs to fetch
- * @param {Object} options - Options object
- * @param {number} options.timeoutMs - Per-request timeout in milliseconds (default: 10000)
- * @returns {Promise<Object[]>} Array of parsed JSON responses (or errors)
- */
-function fetchMultipleViaWindow(urls, { timeoutMs = 10000 } = {}) {
+function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, partition = PARTITION } = {}) {
   return new Promise((resolve, reject) => {
-    const win = new BrowserWindow({
-      width: 800,
-      height: 600,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
-
+    const win = createFetchWindow({ partition });
     const results = [];
     let currentIndex = 0;
     let currentTimeout = null;
+    let settled = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (currentTimeout) clearTimeout(currentTimeout);
+      if (!win.isDestroyed()) win.close();
+      fn(value);
+    };
 
     function loadNext() {
       if (currentIndex >= urls.length) {
-        win.close();
-        resolve(results);
+        finish(resolve, results);
         return;
       }
 
-      const url = urls[currentIndex];
-
+      if (currentTimeout) clearTimeout(currentTimeout);
       currentTimeout = setTimeout(() => {
-        win.close();
-        reject(new Error(`Request timeout for URL ${currentIndex}: ${url}`));
+        finish(reject, new Error(`Request timeout for URL ${currentIndex}: ${urls[currentIndex]}`));
       }, timeoutMs);
 
-      win.loadURL(url);
+      win.loadURL(urls[currentIndex]);
     }
 
-    win.webContents.on('did-finish-load', async () => {
+    win.webContents.on('did-stop-loading', async () => {
       try {
-        const bodyText = await win.webContents.executeJavaScript(
-          'document.body.innerText || document.body.textContent'
-        );
+        if (win.isDestroyed() || win.webContents.isLoading()) return;
+        const currentUrl = win.webContents.getURL();
+        if (!urlLooksReady(currentUrl, urls[currentIndex])) return;
 
+        const bodyText = await win.webContents.executeJavaScript(
+          'document.body?.innerText || document.body?.textContent || ""',
+        );
+        if (!String(bodyText || '').trim()) return;
+
+        const data = expectJson ? parseResponseBody(bodyText) : String(bodyText);
+        results.push(data);
+        currentIndex += 1;
         if (currentTimeout) {
           clearTimeout(currentTimeout);
           currentTimeout = null;
         }
-
-        const data = parseResponseBody(bodyText);
-        results.push(data);
-        currentIndex++;
         loadNext();
       } catch (err) {
-        if (currentTimeout) {
-          clearTimeout(currentTimeout);
-          currentTimeout = null;
-        }
-        win.close();
-        reject(err);
+        finish(reject, err);
       }
     });
 
-    win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-      if (currentTimeout) {
-        clearTimeout(currentTimeout);
-        currentTimeout = null;
-      }
-      win.close();
-      reject(new Error(`LoadFailed at URL ${currentIndex}: ${errorCode} ${errorDescription}`));
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+      finish(reject, new Error(`LoadFailed at URL ${currentIndex}: ${errorCode} ${errorDescription}`));
     });
 
     loadNext();
   });
 }
 
-module.exports = { fetchViaWindow, fetchMultipleViaWindow };
+module.exports = {
+  fetchViaWindow,
+  fetchMultipleViaWindow,
+  parseResponseBody,
+  createFetchWindow,
+  getProviderSession,
+};

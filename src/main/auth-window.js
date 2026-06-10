@@ -1,30 +1,42 @@
-const { BrowserWindow, shell, ipcMain, Notification } = require('electron');
+const { BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const { setSecret } = require('./store');
 const { getPreloadPath } = require('./assets');
-const { readBrowserCookie } = require('./browser-cookies');
-
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const { readBrowserCookie, diagnoseBrowserCookie } = require('./browser-cookies');
+const { openChromiumUrl } = require('./open-chromium');
+const { getProviderSession, findSessionCookie, flushCookies } = require('./provider-session');
+const { CHROME_UA } = require('../shared/ua');
 
 let activePrompt = null;
+let loginQueue = Promise.resolve();
 
 function sendPrompt(channel, payload) {
   if (!activePrompt?.win || activePrompt.win.isDestroyed()) return;
   activePrompt.win.webContents.send(channel, payload);
 }
 
+function cleanupSession(session) {
+  if (!session || session.cleaned) return;
+  session.cleaned = true;
+  if (session.timer) clearInterval(session.timer);
+  if (session.loginWin && !session.loginWin.isDestroyed()) session.loginWin.close();
+  for (const id of session.ipcIds || []) {
+    try { ipcMain.removeHandler(id); } catch { /* ignore */ }
+  }
+  if (activePrompt?.session === session) activePrompt = null;
+}
+
 function closePrompt() {
   if (!activePrompt) return;
-  const { win, ipcIds } = activePrompt;
-  for (const id of ipcIds) ipcMain.removeHandler(id);
-  activePrompt = null;
+  const { win, session } = activePrompt;
+  cleanupSession(session);
   if (win && !win.isDestroyed()) win.close();
 }
 
 function createAuthPromptWindow(opts) {
   const win = new BrowserWindow({
     width: 420,
-    height: 360,
+    height: 400,
     show: false,
     resizable: false,
     frame: false,
@@ -37,27 +49,95 @@ function createAuthPromptWindow(opts) {
     },
   });
 
+  const cookieHint = (opts.cookieNames || [opts.cookieName]).filter(Boolean).join(', ') || 'session cookie';
   win.loadFile(path.join(__dirname, '../renderer/auth-prompt/index.html'));
   win.once('ready-to-show', () => {
     win.show();
     sendPrompt('auth-prompt:init', {
       title: opts.title,
-      description: `Opened ${opts.loginUrl} in your default browser. Finish sign-in there — API-Meter reads the session from Chrome or Edge automatically.`,
-      status: 'Waiting for browser sign-in…',
+      description: `Sign in using the in-app browser window or Chrome/Edge. API-Meter reads the ${cookieHint} automatically.`,
+      status: 'Waiting for sign-in…',
       mode: 'waiting',
+      cookieNameHint: cookieHint,
     });
   });
 
   return win;
 }
 
-function tryCaptureCookie(opts) {
+function createLoginBrowserWindow(opts) {
+  const win = new BrowserWindow({
+    width: 520,
+    height: 720,
+    show: true,
+    title: opts.title,
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      partition: 'persist:api-meter',
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  win.webContents.setUserAgent(CHROME_UA);
+  win.loadURL(opts.loginUrl);
+  return win;
+}
+
+async function persistCapturedCookie(opts, hit) {
+  setSecret(opts.secretKey, hit.value);
+  if (hit.name) setSecret(`${opts.secretKey}-cookie-name`, hit.name);
+  const { getProviderSession, setCookies, flushCookies } = require('./provider-session');
+  const ses = getProviderSession();
+  const cookieName = hit.name || (opts.cookieNames || [opts.cookieName]).filter(Boolean)[0];
+  if (!cookieName) return;
+  await setCookies(ses, [{
+    url: opts.loginUrl,
+    name: cookieName,
+    value: hit.value,
+    domain: opts.domain,
+    path: '/',
+    secure: true,
+    sameSite: 'no_restriction',
+  }]);
+  await flushCookies(ses);
+}
+
+async function tryCaptureCookie(opts) {
   const names = opts.cookieNames || [opts.cookieName];
   const hit = readBrowserCookie({ cookieNames: names, domain: opts.domain });
   if (!hit?.value) return null;
-  setSecret(opts.secretKey, hit.value);
-  if (hit.name) setSecret(`${opts.secretKey}-cookie-name`, hit.name);
+  await persistCapturedCookie(opts, hit);
   return hit;
+}
+
+async function tryCaptureElectronCookie(opts) {
+  const names = opts.cookieNames || [opts.cookieName];
+  const ses = getProviderSession();
+  const hit = await findSessionCookie(ses, { url: opts.loginUrl, names });
+  if (!hit?.value) return null;
+  const captured = { value: hit.value, name: hit.name, browser: 'in-app' };
+  await persistCapturedCookie(opts, captured);
+  return captured;
+}
+
+function cookieFailureMessage(opts) {
+  const diag = diagnoseBrowserCookie({
+    cookieNames: opts.cookieNames || [opts.cookieName],
+    domain: opts.domain,
+  });
+  switch (diag.reason) {
+    case 'unsupported_platform':
+      return 'Use the in-app sign-in window or paste the session token below.';
+    case 'db_locked':
+      return 'Browser cookies are locked. Use the in-app sign-in window or paste the token manually.';
+    case 'v20_encrypted':
+      return 'Chrome app-bound cookies cannot be read from disk. Use the in-app sign-in window or paste the token below.';
+    case 'not_found':
+      return 'No session yet. Finish sign-in in the in-app window or Chrome/Edge, then click Check browser.';
+    default:
+      return 'No session found yet. Finish sign-in, then click Check browser.';
+  }
 }
 
 function registerPromptHandlers(session) {
@@ -67,8 +147,9 @@ function registerPromptHandlers(session) {
       session.reject?.(new Error('Login cancelled'));
       closePrompt();
     },
-    'auth-prompt:retry': () => {
-      const hit = tryCaptureCookie(session.opts);
+    'auth-prompt:retry': async () => {
+      let hit = await tryCaptureElectronCookie(session.opts);
+      if (!hit) hit = await tryCaptureCookie(session.opts);
       if (hit) {
         session.completed = true;
         sendPrompt('auth-prompt:status', { status: `Connected via ${hit.browser} (${hit.name})`, mode: 'ok' });
@@ -76,18 +157,23 @@ function registerPromptHandlers(session) {
         setTimeout(closePrompt, 600);
       } else {
         sendPrompt('auth-prompt:status', {
-          status: 'No session found yet. Finish sign-in in your browser, then click Check browser.',
+          status: cookieFailureMessage(session.opts),
           mode: 'waiting',
         });
       }
     },
-    'auth-prompt:submit': (_e, value) => {
-      const token = String(value || '').trim();
+    'auth-prompt:submit': async (_e, payload) => {
+      const token = String((typeof payload === 'object' ? payload?.value : payload) || '').trim();
+      const cookieName = typeof payload === 'object'
+        ? String(payload?.cookieName || '').trim()
+        : '';
       if (!token) {
         sendPrompt('auth-prompt:status', { status: 'Paste a session token first.', mode: 'error' });
         return;
       }
-      setSecret(session.opts.secretKey, token);
+      const defaultName = (session.opts.cookieNames || [session.opts.cookieName]).filter(Boolean)[0];
+      const resolvedName = cookieName || defaultName;
+      await persistCapturedCookie(session.opts, { value: token, name: resolvedName, browser: 'manual' });
       session.completed = true;
       sendPrompt('auth-prompt:status', { status: 'Session saved manually.', mode: 'ok' });
       session.resolve?.(token);
@@ -103,11 +189,7 @@ function registerPromptHandlers(session) {
   return ipcIds;
 }
 
-/**
- * Opens the system default browser for login, then reads session cookies from Chrome/Edge.
- * @param {{ loginUrl: string, domain: string, cookieName?: string, cookieNames?: string[], secretKey: string, title: string }} opts
- */
-function openAuthWindow(opts) {
+function openAuthWindowInner(opts) {
   return new Promise((resolve, reject) => {
     closePrompt();
 
@@ -118,13 +200,24 @@ function openAuthWindow(opts) {
       cancelled: false,
       completed: false,
       timer: null,
+      ipcIds: [],
+      cleaned: false,
+      loginWin: null,
     };
 
     const win = createAuthPromptWindow(opts);
-    const ipcIds = registerPromptHandlers(session);
-    activePrompt = { win, ipcIds, session };
+    session.ipcIds = registerPromptHandlers(session);
+    activePrompt = { win, session };
 
-    shell.openExternal(opts.loginUrl).catch((err) => {
+    session.loginWin = createLoginBrowserWindow(opts);
+
+    openChromiumUrl(opts.loginUrl).then(({ browser }) => {
+      if (session.cancelled || session.completed) return;
+      sendPrompt('auth-prompt:status', {
+        status: `Opened ${browser === 'default' ? 'default browser' : browser}. Sign in there or in the in-app window.`,
+        mode: 'waiting',
+      });
+    }).catch((err) => {
       session.reject(err);
       closePrompt();
     });
@@ -132,15 +225,15 @@ function openAuthWindow(opts) {
     if (Notification.isSupported()) {
       new Notification({
         title: opts.title,
-        body: 'Complete sign-in in your default browser. API-Meter will detect the session automatically.',
+        body: 'Sign in using the in-app browser window or Chrome/Edge.',
       }).show();
     }
 
-    const poll = () => {
-      if (session.cancelled) return;
-      const hit = tryCaptureCookie(opts);
+    const poll = async () => {
+      if (session.cancelled || session.completed) return;
+      let hit = await tryCaptureElectronCookie(opts);
+      if (!hit) hit = await tryCaptureCookie(opts);
       if (hit) {
-        clearInterval(session.timer);
         session.completed = true;
         sendPrompt('auth-prompt:status', { status: `Connected via ${hit.browser} (${hit.name})`, mode: 'ok' });
         session.resolve(hit.value);
@@ -148,25 +241,30 @@ function openAuthWindow(opts) {
       }
     };
 
-    session.timer = setInterval(poll, 2000);
-    poll();
+    session.timer = setInterval(() => { poll().catch(() => {}); }, 2000);
+    poll().catch(() => {});
 
     win.on('closed', () => {
-      clearInterval(session.timer);
-      if (!session.completed && !session.cancelled && activePrompt?.session === session) {
-        session.reject(new Error('Login window closed'));
+      if (!session.completed && !session.cancelled) {
+        session.reject?.(new Error('Login window closed'));
       }
-      activePrompt = null;
+      cleanupSession(session);
     });
 
     setTimeout(() => {
-      if (session.cancelled || activePrompt?.session !== session) return;
+      if (session.cancelled || session.completed || activePrompt?.session !== session) return;
       sendPrompt('auth-prompt:status', {
-        status: 'Still waiting… If auto-detect fails, paste the session token below (DevTools → Application → Cookies).',
+        status: cookieFailureMessage(opts),
         mode: 'waiting',
       });
     }, 20000);
   });
 }
 
-module.exports = { openAuthWindow, CHROME_UA, readBrowserCookie, tryCaptureCookie };
+function openAuthWindow(opts) {
+  const run = loginQueue.then(() => openAuthWindowInner(opts));
+  loginQueue = run.catch(() => {});
+  return run;
+}
+
+module.exports = { openAuthWindow, tryCaptureCookie };

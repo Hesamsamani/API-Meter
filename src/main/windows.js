@@ -8,8 +8,8 @@ function preloadPath() {
 
 function createDashboardWindow() {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 720,
+    width: 960,
+    height: 640,
     show: false,
     frame: false,
     backgroundColor: '#0a0a0b',
@@ -20,13 +20,12 @@ function createDashboardWindow() {
     },
   });
   win.loadFile(path.join(__dirname, '../renderer/dashboard/index.html'));
-  win.on('closed', () => { win._apiMeterRef = null; });
   return win;
 }
 
 function createPopoverWindow() {
   const win = new BrowserWindow({
-    width: 340,
+    width: 360,
     height: 480,
     show: false,
     frame: false,
@@ -41,9 +40,27 @@ function createPopoverWindow() {
     },
   });
   win.loadFile(path.join(__dirname, '../renderer/tray-popover/index.html'));
+
+  let hideTimer = null;
   win.on('blur', () => {
-    if (!win.isDestroyed()) win.hide();
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      if (!win.isDestroyed() && !win.isFocused()) win.hide();
+    }, 180);
   });
+  win.on('focus', () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  });
+  win.on('show', () => {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  });
+
   return win;
 }
 
@@ -126,30 +143,27 @@ function showPopover(getOrCreate, { onShow } = {}) {
   return win;
 }
 
-function toggleFloatingWidget({ getWin, createWin, settings, onEnabledChange }) {
+function toggleFloatingWidget({ getWin, createWin, settings }) {
   let win = getWin();
-  if (win && !win.isDestroyed() && win.isVisible()) {
+  if (!win || win.isDestroyed()) win = createWin();
+  if (win.isVisible()) {
     win.hide();
     settings.set('floatingWidget.enabled', false);
-    onEnabledChange?.(false);
-    return null;
+  } else {
+    win.show();
+    settings.set('floatingWidget.enabled', true);
   }
-  if (!win || win.isDestroyed()) win = createWin();
-  settings.set('floatingWidget.enabled', true);
-  onEnabledChange?.(true);
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  win.setPosition(Math.floor(sw / 2 - 140), 80);
-  win.show();
   return win;
 }
 
 module.exports = {
   createDashboardWindow,
   createPopoverWindow,
-  createFloatingWidget,
   createSettingsWindow,
+  createFloatingWidget,
   showDashboard,
   showPopover,
   showSettings,
   toggleFloatingWidget,
+  positionNearTray,
 };

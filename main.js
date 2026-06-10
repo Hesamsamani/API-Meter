@@ -201,17 +201,29 @@ app.whenReady().then(() => {
     onSettings: () => showSettings(getSettingsWin),
     onProviderLogin: async (id) => {
       const adapter = registry.get(id);
-      if (adapter?.login) {
+      if (!adapter?.login) return;
+      try {
         await adapter.login();
         await scheduler.refreshProviderAndReschedule(adapter);
+        broadcastUsage();
+      } catch (err) {
+        if (Notification.isSupported()) {
+          new Notification({ title: 'Login failed', body: err.message || String(err) }).show();
+        }
+        throw err;
       }
     },
     onProviderLogout: async (id) => {
       const adapter = registry.get(id);
-      if (adapter?.logout) {
+      if (!adapter?.logout) return;
+      try {
         await adapter.logout();
         store.setError(id, 'Disconnected');
         broadcastUsage();
+      } catch (err) {
+        if (Notification.isSupported()) {
+          new Notification({ title: 'Disconnect failed', body: err.message || String(err) }).show();
+        }
       }
     },
     onQuit: () => app.quit(),

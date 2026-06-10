@@ -30,8 +30,10 @@ function mockSettings(data = {}) {
 function createHarness(settingsData) {
   const settings = mockSettings(settingsData);
   const usageStore = {
+    setSnapshot() {},
     setLive() {},
     setError() {},
+    get() { return null; },
   };
   const good = {
     id: 'cursor',

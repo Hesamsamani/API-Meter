@@ -103,8 +103,22 @@ function buildContextMenu(handlers) {
       {
         label,
         submenu: [
-          { label: 'Re-login', click: () => handlers.onProviderLogin?.(id) },
-          { label: 'Disconnect', click: () => handlers.onProviderLogout?.(id) },
+          {
+            label: 'Re-login',
+            click: () => {
+              Promise.resolve(handlers.onProviderLogin?.(id)).catch((err) => {
+                console.error(`Re-login failed for ${id}:`, err);
+              });
+            },
+          },
+          {
+            label: 'Disconnect',
+            click: () => {
+              Promise.resolve(handlers.onProviderLogout?.(id)).catch((err) => {
+                console.error(`Disconnect failed for ${id}:`, err);
+              });
+            },
+          },
         ],
       },
     ];

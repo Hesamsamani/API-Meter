@@ -30,6 +30,7 @@
       "buildResources": "assets"
     },
     "files": ["**/*", "!tests/**", "!docs/**", "!scripts/**"],
+    "asarUnpack": ["**/node_modules/better-sqlite3/**"],
     "extraResources": [
       { "from": "assets/providers", "to": "assets/providers", "filter": ["**/*"] }
     ],

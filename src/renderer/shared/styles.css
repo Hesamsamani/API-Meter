@@ -811,11 +811,20 @@ body::before {
 .popover-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.popover-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .popover-body .provider-card {

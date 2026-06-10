@@ -23,32 +23,39 @@ function mapPerplexityRateLimits(body) {
 }
 
 async function ensurePerplexityCookies() {
-  const { session } = require('electron');
   const { getSecret } = require('../main/store');
+  const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
   const token = getSecret('perplexity-session');
   if (!token) throw new Error('Perplexity login required');
   const cookieName = getSecret('perplexity-session-cookie-name') || 'pplx.session';
-  await session.defaultSession.cookies.set({
+  const ses = getProviderSession();
+  await setCookies(ses, [{
     url: 'https://www.perplexity.ai',
     name: cookieName,
     value: token,
     domain: '.perplexity.ai',
     path: '/',
-    secure: cookieName.startsWith('__Secure-'),
-  });
+    secure: true,
+    sameSite: 'no_restriction',
+  }]);
+  await flushCookies(ses);
 }
 
 function createPerplexityAdapter() {
   const { openAuthWindow } = require('../main/auth-window');
-  const { getSecret } = require('../main/store');
+  const { getSecret, isProviderDisconnected, setProviderDisconnected } = require('../main/store');
 
   return {
     id: 'perplexity',
     name: 'PPLX',
     authMethod: 'browser',
     async isAvailable() { return true; },
-    async isAuthenticated() { return !!getSecret('perplexity-session'); },
+    async isAuthenticated() {
+      if (isProviderDisconnected('perplexity')) return false;
+      return !!getSecret('perplexity-session');
+    },
     async login() {
+      setProviderDisconnected('perplexity', false);
       await openAuthWindow({
         loginUrl: 'https://www.perplexity.ai/',
         domain: '.perplexity.ai',
@@ -61,8 +68,10 @@ function createPerplexityAdapter() {
       const { setSecret } = require('../main/store');
       setSecret('perplexity-session', '');
       setSecret('perplexity-session-cookie-name', '');
+      setProviderDisconnected('perplexity', true);
     },
     async fetchUsage() {
+      if (isProviderDisconnected('perplexity')) throw new Error('Perplexity disconnected');
       const { fetchViaWindow } = require('../main/fetch-via-window');
       await ensurePerplexityCookies();
       const body = await fetchViaWindow('https://www.perplexity.ai/rest/rate-limit/all');

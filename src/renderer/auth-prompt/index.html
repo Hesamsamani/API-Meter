@@ -27,7 +27,7 @@
     }
     .auth-status {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
       padding: 12px 14px;
       border-radius: 8px;
@@ -35,9 +35,12 @@
       background: rgba(255, 255, 255, 0.02);
       font-family: var(--font-mono);
       font-size: 11px;
+      line-height: 1.45;
     }
     .auth-status.waiting::before {
       content: '';
+      flex-shrink: 0;
+      margin-top: 3px;
       width: 8px;
       height: 8px;
       border-radius: 50%;
@@ -47,6 +50,8 @@
     }
     .auth-status.ok::before {
       content: '';
+      flex-shrink: 0;
+      margin-top: 3px;
       width: 8px;
       height: 8px;
       border-radius: 50%;
@@ -55,6 +60,8 @@
     }
     .auth-status.error::before {
       content: '';
+      flex-shrink: 0;
+      margin-top: 3px;
       width: 8px;
       height: 8px;
       border-radius: 50%;
@@ -73,10 +80,9 @@
       color: var(--muted);
       margin-bottom: 6px;
     }
+    .auth-manual input,
     .auth-manual textarea {
       width: 100%;
-      min-height: 72px;
-      resize: vertical;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.03);
@@ -84,6 +90,13 @@
       font-family: var(--font-mono);
       font-size: 11px;
       padding: 10px 12px;
+    }
+    .auth-manual input {
+      margin-bottom: 10px;
+    }
+    .auth-manual textarea {
+      min-height: 64px;
+      resize: vertical;
     }
     .auth-actions {
       display: flex;
@@ -102,6 +115,7 @@
       text-transform: uppercase;
       padding: 10px 12px;
       cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
     .auth-actions button.primary {
       border-color: rgba(34, 197, 94, 0.35);
@@ -113,11 +127,13 @@
 <body>
   <div class="auth-shell">
     <h1 id="auth-title">Browser Login</h1>
-    <p id="auth-desc">Sign in using your default browser. API-Meter will read the session from Chrome or Edge after you finish.</p>
+    <p id="auth-desc">Sign in using the in-app browser window or Chrome/Edge. API-Meter detects the session automatically.</p>
     <div class="auth-status waiting" id="auth-status">Waiting for browser sign-in…</div>
     <div class="auth-manual">
-      <label for="auth-manual-value">Manual session token (fallback)</label>
-      <textarea id="auth-manual-value" placeholder="Paste session cookie value if auto-detect fails"></textarea>
+      <label for="auth-cookie-name">Cookie name (optional)</label>
+      <input id="auth-cookie-name" type="text" placeholder="e.g. sessionKey, __Secure-1PSID" autocomplete="off">
+      <label for="auth-manual-value">Session token (fallback)</label>
+      <textarea id="auth-manual-value" placeholder="DevTools → Application → Cookies → copy Value"></textarea>
     </div>
     <div class="auth-actions">
       <button type="button" id="auth-cancel">Cancel</button>

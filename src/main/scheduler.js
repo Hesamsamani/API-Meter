@@ -1,6 +1,8 @@
 const { appendHistory } = require('./store');
+const { isAuthErrorMessage } = require('../shared/auth-errors');
 
 const FAILURE_BACKOFF_MS = 25000;
+const AUTH_FAILURE_BACKOFF_MS = 120000;
 
 class CollectorScheduler {
   /**
@@ -14,6 +16,7 @@ class CollectorScheduler {
     this.timers = new Map();
     this.backoff = new Map();
     this.running = false;
+    this.refreshChain = Promise.resolve();
   }
 
   getSuccessIntervalMs() {
@@ -26,8 +29,10 @@ class CollectorScheduler {
     return this.registry.list().filter((a) => cfg[a.id]?.enabled !== false);
   }
 
-  nextDelay(adapterId, success) {
-    if (!success) return FAILURE_BACKOFF_MS;
+  nextDelay(adapterId, success, message = '') {
+    if (!success) {
+      return isAuthErrorMessage(message) ? AUTH_FAILURE_BACKOFF_MS : FAILURE_BACKOFF_MS;
+    }
     return this.backoff.get(adapterId) ?? this.getSuccessIntervalMs();
   }
 
@@ -38,17 +43,20 @@ class CollectorScheduler {
     try {
       const snap = await adapter.fetchUsage();
       snap.plan = adapter.detectPlan(snap) || snap.plan;
-      this.store.setLive(adapter.id, snap);
-      appendHistory(adapter.id, {
-        timestamp: Date.now(),
-        windows: Object.fromEntries(snap.windows.map((w) => [w.key, w.utilization])),
-      });
+      this.store.setSnapshot(adapter.id, snap);
+      if (snap.source === 'live' && !snap.error) {
+        appendHistory(adapter.id, {
+          timestamp: Date.now(),
+          windows: Object.fromEntries(snap.windows.map((w) => [w.key, w.utilization])),
+        });
+      }
       this.backoff.set(adapter.id, this.getSuccessIntervalMs());
       this.onUpdate();
       return true;
     } catch (err) {
-      this.store.setError(adapter.id, err.message || String(err));
-      this.backoff.set(adapter.id, FAILURE_BACKOFF_MS);
+      const message = err.message || String(err);
+      this.store.setError(adapter.id, message);
+      this.backoff.set(adapter.id, this.nextDelay(adapter.id, false, message));
       this.onUpdate();
       return false;
     }
@@ -61,8 +69,9 @@ class CollectorScheduler {
     const timer = setTimeout(async () => {
       if (!this.running || !this.settings.get('autoRefreshEnabled', true)) return;
       const success = await this.refreshProvider(adapter);
+      const snap = this.store.get(adapter.id);
       if (this.running && this.settings.get('autoRefreshEnabled', true)) {
-        this.scheduleProvider(adapter, this.nextDelay(adapter.id, success));
+        this.scheduleProvider(adapter, this.nextDelay(adapter.id, success, snap?.error || ''));
       }
     }, delayMs);
 
@@ -70,13 +79,18 @@ class CollectorScheduler {
   }
 
   async refreshAll() {
-    await Promise.all(this.getEnabledAdapters().map((a) => this.refreshProvider(a)));
+    const adapters = this.getEnabledAdapters();
+    for (const adapter of adapters) {
+      this.refreshChain = this.refreshChain.then(() => this.refreshProvider(adapter));
+    }
+    await this.refreshChain;
   }
 
   async refreshProviderAndReschedule(adapter) {
     const success = await this.refreshProvider(adapter);
     if (!this.running) return;
-    this.scheduleProvider(adapter, this.nextDelay(adapter.id, success));
+    const snap = this.store.get(adapter.id);
+    this.scheduleProvider(adapter, this.nextDelay(adapter.id, success, snap?.error || ''));
   }
 
   start() {
@@ -87,7 +101,8 @@ class CollectorScheduler {
     for (const adapter of this.getEnabledAdapters()) {
       this.refreshProvider(adapter).then((success) => {
         if (this.running) {
-          this.scheduleProvider(adapter, this.nextDelay(adapter.id, success));
+          const snap = this.store.get(adapter.id);
+          this.scheduleProvider(adapter, this.nextDelay(adapter.id, success, snap?.error || ''));
         }
       });
     }
@@ -104,4 +119,4 @@ class CollectorScheduler {
   }
 }
 
-module.exports = { CollectorScheduler, FAILURE_BACKOFF_MS };
+module.exports = { CollectorScheduler, FAILURE_BACKOFF_MS, AUTH_FAILURE_BACKOFF_MS };

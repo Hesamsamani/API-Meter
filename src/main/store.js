@@ -20,19 +20,51 @@ const settings = new Store({
   },
 });
 
+function secretMetaKey(key) {
+  return `secret_meta_${key}`;
+}
+
 function setSecret(key, value) {
-  if (!safeStorage.isEncryptionAvailable()) {
-    settings.set(`secret_${key}`, value);
+  if (!value) {
+    settings.delete(`secret_${key}`);
+    settings.delete(secretMetaKey(key));
     return;
   }
-  settings.set(`secret_${key}`, safeStorage.encryptString(value).toString('base64'));
+  if (!safeStorage.isEncryptionAvailable()) {
+    settings.set(`secret_${key}`, value);
+    settings.set(secretMetaKey(key), 'plain');
+    return;
+  }
+  settings.set(`secret_${key}`, safeStorage.encryptString(String(value)).toString('base64'));
+  settings.set(secretMetaKey(key), 'enc');
 }
 
 function getSecret(key) {
   const raw = settings.get(`secret_${key}`);
   if (!raw) return null;
-  if (!safeStorage.isEncryptionAvailable()) return raw;
-  return safeStorage.decryptString(Buffer.from(raw, 'base64'));
+  if (!safeStorage.isEncryptionAvailable()) return String(raw);
+
+  const meta = settings.get(secretMetaKey(key), 'enc');
+  if (meta === 'plain') {
+    setSecret(key, String(raw));
+    return String(raw);
+  }
+
+  try {
+    return safeStorage.decryptString(Buffer.from(raw, 'base64'));
+  } catch {
+    return String(raw);
+  }
+}
+
+function setProviderDisconnected(providerId, disconnected) {
+  const providers = settings.get('providers') || {};
+  providers[providerId] = { ...(providers[providerId] || {}), disconnected: !!disconnected };
+  settings.set('providers', providers);
+}
+
+function isProviderDisconnected(providerId) {
+  return settings.get('providers')?.[providerId]?.disconnected === true;
 }
 
 function appendHistory(providerId, entry) {
@@ -48,4 +80,12 @@ function getHistory(providerId) {
   return settings.get(`usageHistory_${providerId}`, []);
 }
 
-module.exports = { settings, setSecret, getSecret, appendHistory, getHistory };
+module.exports = {
+  settings,
+  setSecret,
+  getSecret,
+  setProviderDisconnected,
+  isProviderDisconnected,
+  appendHistory,
+  getHistory,
+};

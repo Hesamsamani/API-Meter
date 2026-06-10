@@ -11,23 +11,48 @@ const live = {
   fetchedAt: new Date().toISOString(),
 };
 
-test('setLive stores snapshot retrievable by id', () => {
+test('setSnapshot stores snapshot retrievable by id', () => {
   const store = new UsageStore();
-  store.setLive('claude-code', live);
+  store.setSnapshot('claude-code', live);
   assert.deepEqual(store.get('claude-code'), live);
+});
+
+test('setSnapshot preserves local source and error from adapter fallback', () => {
+  const store = new UsageStore();
+  const fallback = {
+    providerId: 'gemini',
+    source: 'local',
+    plan: 'AI Pro',
+    windows: [{ key: 'day', label: 'DAY', utilization: 5 }],
+    error: 'InvalidJSON: ...',
+    fetchedAt: new Date().toISOString(),
+  };
+  store.setSnapshot('gemini', fallback);
+  const snap = store.get('gemini');
+  assert.equal(snap.source, 'local');
+  assert.equal(snap.error, fallback.error);
 });
 
 test('setError keeps last good snapshot as stale', () => {
   const store = new UsageStore();
-  store.setLive('claude-code', live);
+  store.setSnapshot('claude-code', live);
   store.setError('claude-code', 'network');
   const snap = store.get('claude-code');
   assert.equal(snap.source, 'stale');
   assert.equal(snap.error, 'network');
 });
 
+test('setError clears windows on auth failures', () => {
+  const store = new UsageStore();
+  store.setSnapshot('claude-ai', live);
+  store.setError('claude-ai', 'Claude.ai login required');
+  const snap = store.get('claude-ai');
+  assert.equal(snap.authRequired, true);
+  assert.deepEqual(snap.windows, []);
+});
+
 test('getAll returns map of all providers', () => {
   const store = new UsageStore();
-  store.setLive('cursor', { ...live, providerId: 'cursor' });
+  store.setSnapshot('cursor', { ...live, providerId: 'cursor' });
   assert.equal(Object.keys(store.getAll()).length, 1);
 });

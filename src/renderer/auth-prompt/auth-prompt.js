@@ -2,6 +2,7 @@ const titleEl = document.getElementById('auth-title');
 const descEl = document.getElementById('auth-desc');
 const statusEl = document.getElementById('auth-status');
 const manualEl = document.getElementById('auth-manual-value');
+const cookieNameEl = document.getElementById('auth-cookie-name');
 
 function setStatus(text, mode = 'waiting') {
   statusEl.textContent = text;
@@ -12,6 +13,9 @@ window.apiMeter.onAuthPromptInit?.((payload) => {
   titleEl.textContent = payload.title || 'Browser Login';
   descEl.textContent = payload.description || descEl.textContent;
   setStatus(payload.status || 'Waiting for browser sign-in…', payload.mode || 'waiting');
+  if (payload.cookieNameHint && cookieNameEl && !cookieNameEl.value) {
+    cookieNameEl.placeholder = payload.cookieNameHint;
+  }
 });
 
 window.apiMeter.onAuthPromptStatus?.((payload) => {
@@ -32,5 +36,8 @@ document.getElementById('auth-save')?.addEventListener('click', () => {
     setStatus('Paste a session token first.', 'error');
     return;
   }
-  window.apiMeter.submitAuthPrompt(value);
+  window.apiMeter.submitAuthPrompt({
+    value,
+    cookieName: cookieNameEl?.value?.trim() || '',
+  });
 });

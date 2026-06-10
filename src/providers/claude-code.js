@@ -2,6 +2,7 @@ const fs = require('fs');
 const https = require('https');
 const { clampPercent } = require('../shared/normalize');
 const { claudeCredentialsPath } = require('../shared/paths');
+const { isProviderDisconnected, setProviderDisconnected } = require('../main/store');
 
 function inferPlan(body) {
   const tier = body.rate_limit_tier || body.subscriptionType || '';
@@ -59,7 +60,15 @@ function fetchUsageApi(token) {
       let raw = '';
       res.on('data', (c) => { raw += c; });
       res.on('end', () => {
-        if (res.statusCode !== 200) return reject(new Error(`Claude Code usage HTTP ${res.statusCode}`));
+        if (res.statusCode === 401) {
+          return reject(new Error('Claude Code session expired — run `claude` CLI to re-authenticate'));
+        }
+        if (res.statusCode === 429) {
+          return reject(new Error('Claude Code rate limited (429) — try again later'));
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Claude Code usage HTTP ${res.statusCode}`));
+        }
         resolve(mapClaudeCodeResponse(JSON.parse(raw)));
       });
     });
@@ -74,12 +83,21 @@ function createClaudeCodeAdapter() {
     name: 'CODE',
     authMethod: 'local-oauth',
     async isAvailable() { return fs.existsSync(claudeCredentialsPath()); },
-    async isAuthenticated() { return !!readAccessToken(); },
-    async login() { throw new Error('Run `claude` CLI and authenticate'); },
-    async logout() {},
+    async isAuthenticated() {
+      if (isProviderDisconnected('claude-code')) return false;
+      return !!readAccessToken();
+    },
+    async login() {
+      setProviderDisconnected('claude-code', false);
+      throw new Error('Run `claude` CLI and authenticate');
+    },
+    async logout() {
+      setProviderDisconnected('claude-code', true);
+    },
     async fetchUsage() {
+      if (isProviderDisconnected('claude-code')) throw new Error('Claude Code disconnected');
       const token = readAccessToken();
-      if (!token) throw new Error('Claude Code not logged in');
+      if (!token) throw new Error('Claude Code not logged in — run `claude` CLI');
       return fetchUsageApi(token);
     },
     detectPlan(snap) { return snap.plan; },
