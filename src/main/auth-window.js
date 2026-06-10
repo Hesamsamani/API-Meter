@@ -1,6 +1,7 @@
 const { BrowserWindow, shell, ipcMain, Notification } = require('electron');
 const path = require('path');
 const { setSecret } = require('./store');
+const { getPreloadPath } = require('./assets');
 const { readBrowserCookie } = require('./browser-cookies');
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -30,7 +31,7 @@ function createAuthPromptWindow(opts) {
     alwaysOnTop: true,
     backgroundColor: '#0a0a0b',
     webPreferences: {
-      preload: path.join(__dirname, '../../preload.js'),
+      preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },

@@ -1,7 +1,10 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
+const { getPreloadPath } = require('./assets');
 
-const PRELOAD = path.join(__dirname, '../../preload.js');
+function preloadPath() {
+  return getPreloadPath();
+}
 
 function createDashboardWindow() {
   const win = new BrowserWindow({
@@ -11,7 +14,7 @@ function createDashboardWindow() {
     frame: false,
     backgroundColor: '#0a0a0b',
     webPreferences: {
-      preload: PRELOAD,
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -32,7 +35,7 @@ function createPopoverWindow() {
     alwaysOnTop: true,
     backgroundColor: '#0a0a0b',
     webPreferences: {
-      preload: PRELOAD,
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -54,7 +57,7 @@ function createSettingsWindow() {
     backgroundColor: '#0a0a0b',
     parent: undefined,
     webPreferences: {
-      preload: PRELOAD,
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -74,7 +77,7 @@ function createFloatingWidget() {
     skipTaskbar: true,
     show: false,
     webPreferences: {
-      preload: PRELOAD,
+      preload: preloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -106,10 +109,18 @@ function showSettings(getOrCreate) {
   return win;
 }
 
-function showPopover(getOrCreate) {
+function showPopover(getOrCreate, { onShow } = {}) {
   let win = getOrCreate();
   if (win.isDestroyed()) win = getOrCreate(true);
   positionNearTray(win);
+
+  const notify = () => onShow?.(win);
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', notify);
+  } else {
+    notify();
+  }
+
   win.show();
   win.focus();
   return win;

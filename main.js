@@ -4,6 +4,7 @@ const { createRegistry } = require('./src/providers/registry');
 const { UsageStore } = require('./src/main/usage-store');
 const { CollectorScheduler } = require('./src/main/scheduler');
 const { getHistory, settings } = require('./src/main/store');
+const { providerLogoUrl } = require('./src/main/assets');
 const { createTray } = require('./src/main/tray');
 const { AlertManager } = require('./src/main/alerts');
 const {
@@ -67,7 +68,22 @@ function broadcastSettings() {
   }
 }
 
+function seedStore() {
+  for (const adapter of registry.list()) {
+    if (!store.get(adapter.id)) {
+      store.setError(adapter.id, 'Awaiting data…');
+    }
+  }
+}
+
+function pushUsageTo(win) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('usage:updated', store.getAll());
+}
+
 function registerIpc() {
+  ipcMain.handle('app:ping', () => true);
+  ipcMain.handle('asset:providerLogo', (_e, providerId) => providerLogoUrl(providerId));
   ipcMain.handle('usage:getAll', () => store.getAll());
   ipcMain.handle('usage:getHistory', (_e, providerId) => getHistory(providerId));
   ipcMain.handle('usage:refreshAll', async () => {
@@ -159,6 +175,7 @@ app.whenReady().then(() => {
   });
 
   registerIpc();
+  seedStore();
 
   scheduler = new CollectorScheduler({
     registry,
@@ -198,7 +215,9 @@ app.whenReady().then(() => {
       }
     },
     onQuit: () => app.quit(),
-    onShowPopover: () => showPopover(getPopoverWin),
+    onShowPopover: () => showPopover(getPopoverWin, {
+      onShow: (win) => pushUsageTo(win),
+    }),
   });
 
   if (settings.get('floatingWidget.enabled')) {

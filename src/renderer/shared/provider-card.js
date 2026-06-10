@@ -13,9 +13,6 @@ const ORDER = ['claude-ai', 'claude-code', 'gemini', 'perplexity', 'grok', 'curs
 
 function providerLogoSrc(providerId) {
   if (!providerId) return '';
-  if (typeof window !== 'undefined' && window.apiMeter?.providerLogoUrl) {
-    return window.apiMeter.providerLogoUrl(providerId);
-  }
   return new URL(`../assets/providers/${providerId}.png`, window.location.href).href;
 }
 
