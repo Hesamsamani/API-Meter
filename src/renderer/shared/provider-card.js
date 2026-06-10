@@ -11,14 +11,20 @@ const PROVIDER_META = {
 
 const ORDER = ['claude-ai', 'claude-code', 'gemini', 'perplexity', 'grok', 'cursor'];
 
-const LOGO_BASE = '../../../assets/providers';
+function providerLogoSrc(providerId) {
+  if (!providerId) return '';
+  if (typeof window !== 'undefined' && window.apiMeter?.providerLogoUrl) {
+    return window.apiMeter.providerLogoUrl(providerId);
+  }
+  return new URL(`../assets/providers/${providerId}.png`, window.location.href).href;
+}
 
 function providerLogoHtml(meta, providerId) {
   const grokClass = meta.label === 'Grok' ? ' provider-logo--grok' : '';
-  const src = providerId ? `${LOGO_BASE}/${providerId}.png` : '';
+  const src = providerLogoSrc(providerId);
   return `
     <div class="provider-logo${grokClass}">
-      ${src ? `<img class="provider-logo-img" src="${src}" alt="${meta.label}" width="28" height="28" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}
+      ${src ? `<img class="provider-logo-img" src="${src}" alt="${meta.label}" width="28" height="28" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}
       <span class="provider-logo-fallback"${src ? ' hidden' : ''}>${meta.initials}</span>
     </div>`;
 }

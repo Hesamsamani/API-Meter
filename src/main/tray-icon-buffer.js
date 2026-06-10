@@ -55,22 +55,9 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
-const BG_RGB = [10, 10, 11];
-
-function fillBackground(rgba, size) {
-  for (let i = 0; i < size * size; i++) {
-    const off = i * 4;
-    rgba[off] = BG_RGB[0];
-    rgba[off + 1] = BG_RGB[1];
-    rgba[off + 2] = BG_RGB[2];
-    rgba[off + 3] = 255;
-  }
-}
-
 function drawTrayGauge(rgba, size, rgb) {
   const w = size;
   const h = size;
-  fillBackground(rgba, size);
   const set = (x, y, r, g, b, a = 255) => {
     const ix = Math.round(x);
     const iy = Math.round(y);
@@ -101,8 +88,8 @@ function drawTrayGauge(rgba, size, rgb) {
 
   const cx = w / 2;
   const cy = h / 2;
-  const ringR = size * 0.34;
-  const thickness = Math.max(2, size * 0.14);
+  const ringR = size * 0.36;
+  const thickness = Math.max(2.5, size * 0.18);
 
   for (let a = 0; a < 270; a++) {
     const rad0 = ((a - 90) * Math.PI) / 180;

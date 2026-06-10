@@ -1,6 +1,23 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { pathToFileURL } = require('url');
+
+function resolveProviderLogoPath(providerId) {
+  const fileName = `${providerId}.png`;
+  const candidates = [
+    path.join(__dirname, 'src', 'renderer', 'assets', 'providers', fileName),
+    path.join(__dirname, 'assets', 'providers', fileName),
+    path.join(process.resourcesPath, 'assets', 'providers', fileName),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
 
 contextBridge.exposeInMainWorld('apiMeter', {
+  providerLogoUrl: (providerId) => pathToFileURL(resolveProviderLogoPath(providerId)).href,
   getUsage: () => ipcRenderer.invoke('usage:getAll'),
   getHistory: (providerId) => ipcRenderer.invoke('usage:getHistory', providerId),
   refreshAll: () => ipcRenderer.invoke('usage:refreshAll'),

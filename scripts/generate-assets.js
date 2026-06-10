@@ -9,6 +9,7 @@ const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
 const PROVIDERS_DIR = path.join(ROOT, 'assets', 'providers');
+const RENDERER_PROVIDERS_DIR = path.join(ROOT, 'src', 'renderer', 'assets', 'providers');
 
 const COLORS = {
   bg: [20, 20, 22, 255],
@@ -236,11 +237,10 @@ const DRAW = {
 
 function drawTrayIcon(ctx, accent = COLORS.green) {
   const { w, h } = ctx;
-  ctx.fill(COLORS.bg);
   const cx = w / 2;
   const cy = h / 2;
-  const r = w * 0.34;
-  const thickness = Math.max(1.8, w * 0.14);
+  const r = w * 0.36;
+  const thickness = Math.max(2.5, w * 0.18);
   for (let a = 0; a < 270; a++) {
     const rad0 = ((a - 90) * Math.PI) / 180;
     const rad1 = ((a - 88) * Math.PI) / 180;
@@ -277,9 +277,11 @@ function drawAppIcon(ctx) {
 
 // ── Main ─────────────────────────────────────────────────────
 for (const id of Object.keys(DRAW)) {
-  const out = path.join(PROVIDERS_DIR, `${id}.png`);
-  writePng(out, 64, 64, DRAW[id]);
-  console.log('wrote', out);
+  for (const dir of [PROVIDERS_DIR, RENDERER_PROVIDERS_DIR]) {
+    const out = path.join(dir, `${id}.png`);
+    writePng(out, 64, 64, DRAW[id]);
+    console.log('wrote', out);
+  }
 }
 
 for (const [name, color] of [

@@ -1,0 +1,47 @@
+﻿=== Initial process check ===
+Found electron processes:
+
+   Id ProcessName StartTime            
+   -- ----------- ---------            
+ 6712 electron    6/10/2026 11:43:08 PM
+32536 electron    6/10/2026 11:43:07 PM
+35304 electron    6/10/2026 11:43:07 PM
+35332 electron    6/10/2026 11:43:07 PM
+36004 electron    6/10/2026 11:43:08 PM
+36032 electron    6/10/2026 11:43:09 PM
+
+
+
+No API-Meter processes running initially.
+=== Starting npm start ===
+npm start PID: 36604
+=== Electron check after 8 seconds ===
+Electron started successfully:
+
+   Id ProcessName StartTime            
+   -- ----------- ---------            
+ 6712 electron    6/10/2026 11:43:08 PM
+16884 electron    6/10/2026 11:43:17 PM
+18920 electron    6/10/2026 11:43:17 PM
+31144 electron    6/10/2026 11:43:17 PM
+32536 electron    6/10/2026 11:43:07 PM
+35304 electron    6/10/2026 11:43:07 PM
+35332 electron    6/10/2026 11:43:07 PM
+36004 electron    6/10/2026 11:43:08 PM
+36032 electron    6/10/2026 11:43:09 PM
+
+
+
+=== Stopping electron processes ===
+All electron processes stopped.
+npm start HasExited: True
+npm start ExitCode: 
+Electron started: True
+=== STDOUT ===
+
+> api-meter@0.1.0 start
+> electron .
+
+
+=== STDERR ===
+[18920:0610/234324.647:ERROR:network_service_instance_impl.cc(601)] Network service crashed, restarting service.
