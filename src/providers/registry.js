@@ -1,13 +1,18 @@
-const { createMockAdapter } = require('./mock');
+const { createClaudeAiAdapter } = require('./claude-ai');
+const { createClaudeCodeAdapter } = require('./claude-code');
+const { createGeminiAdapter } = require('./gemini');
+const { createPerplexityAdapter } = require('./perplexity');
+const { createGrokAdapter } = require('./grok');
+const { createCursorAdapter } = require('./cursor');
 
 function createRegistry() {
   const adapters = [
-    createMockAdapter('claude-ai', 'CLAUDE'),
-    createMockAdapter('claude-code', 'CODE'),
-    createMockAdapter('gemini', 'GEMINI'),
-    createMockAdapter('perplexity', 'PPLX'),
-    createMockAdapter('grok', 'GROK'),
-    createMockAdapter('cursor', 'CURSOR'),
+    createClaudeAiAdapter(),
+    createClaudeCodeAdapter(),
+    createGeminiAdapter(),
+    createPerplexityAdapter(),
+    createGrokAdapter(),
+    createCursorAdapter(),
   ];
   return {
     list() { return adapters; },
