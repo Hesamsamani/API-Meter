@@ -6,7 +6,13 @@ const { clampPercent } = require('../shared/normalize');
 function readGrokAuth() {
   const p = grokAuthPath();
   if (!fs.existsSync(p)) return null;
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+  if (data?.access_token) return data;
+  const entry = Object.values(data).find(
+    (v) => v && typeof v === 'object' && (v.access_token || v.key),
+  );
+  if (!entry) return null;
+  return { ...entry, access_token: entry.access_token || entry.key };
 }
 
 function grokGet(path, token) {
@@ -75,4 +81,4 @@ function createGrokAdapter() {
   };
 }
 
-module.exports = { createGrokAdapter, mapGrokBilling };
+module.exports = { createGrokAdapter, mapGrokBilling, readGrokAuth };
