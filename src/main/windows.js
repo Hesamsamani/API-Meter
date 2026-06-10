@@ -23,8 +23,8 @@ function createDashboardWindow() {
 
 function createPopoverWindow() {
   const win = new BrowserWindow({
-    width: 320,
-    height: 420,
+    width: 340,
+    height: 480,
     show: false,
     frame: false,
     resizable: false,

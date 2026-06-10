@@ -137,6 +137,56 @@ export function updateProviderCard(el, snapshot, { onLogin } = {}) {
   return fresh;
 }
 
+function thresholdClass(util) {
+  if (util >= 90) return 'red';
+  if (util >= 75) return 'amber';
+  return 'green';
+}
+
+/** Compact horizontal row for tray popover — shows usage % and window stats */
+export function renderSnapshotRow(snapshot, { onLogin } = {}) {
+  const meta = PROVIDER_META[snapshot?.providerId] || { label: snapshot?.providerId, accent: 'var(--muted)', initials: '??' };
+  const el = document.createElement('article');
+  el.className = 'snapshot-row';
+  el.style.setProperty('--accent', meta.accent);
+  el.dataset.providerId = snapshot?.providerId || '';
+
+  const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
+  const needsLogin = isLoginRequired(snapshot) && !hasWindows;
+  const util = worstUtil(snapshot);
+  const badge = sourceBadge(snapshot);
+  const colorClass = hasWindows ? thresholdClass(util) : 'muted';
+
+  const statLine = hasWindows
+    ? snapshot.windows.slice(0, 2).map((w) => {
+        const reset = formatCountdown(w.resetsAt);
+        return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
+      }).join(' · ')
+    : (needsLogin ? 'Login required — click to connect' : (snapshot?.error || 'Awaiting data…'));
+
+  el.innerHTML = `
+    <div class="snapshot-accent"></div>
+    ${providerLogoHtml(meta, snapshot?.providerId)}
+    <div class="snapshot-info">
+      <span class="snapshot-name">${meta.label}</span>
+      <span class="snapshot-plan">${snapshot?.plan || '—'}</span>
+      <span class="snapshot-stats">${statLine}</span>
+    </div>
+    <div class="snapshot-util">
+      <span class="snapshot-pct th-${colorClass}">${hasWindows ? `${util}%` : '—'}</span>
+      <span class="snapshot-badge badge ${badge.cls}">${badge.text}</span>
+    </div>
+    <div class="card-status ${snapshot?.source || 'stale'}"></div>
+  `;
+
+  if (needsLogin && onLogin) {
+    el.classList.add('snapshot-row--clickable');
+    el.addEventListener('click', onLogin);
+  }
+
+  return el;
+}
+
 export function renderSkeletonCard() {
   const el = document.createElement('div');
   el.className = 'skeleton-card';

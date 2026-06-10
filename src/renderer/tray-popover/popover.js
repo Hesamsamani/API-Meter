@@ -1,11 +1,17 @@
 import {
-  renderProviderCard,
+  renderSnapshotRow,
   renderSkeletonCard,
   ORDER,
   worstUtil,
 } from '../shared/provider-card.js';
 
 const container = document.getElementById('popover-cards');
+
+function handleLogin(providerId) {
+  window.apiMeter.loginProvider(providerId).catch((err) => {
+    console.error('Login failed:', err);
+  });
+}
 
 function renderPopover(data) {
   const snaps = data || {};
@@ -15,13 +21,20 @@ function renderPopover(data) {
 
   container.replaceChildren();
   sorted.forEach((snap) => {
-    const card = renderProviderCard(snap, { variant: 'mini' });
-    container.appendChild(card);
+    const row = renderSnapshotRow(snap, {
+      onLogin: () => handleLogin(snap.providerId),
+    });
+    container.appendChild(row);
   });
 }
 
 async function init() {
-  container.replaceChildren(...ORDER.slice(0, 3).map(() => renderSkeletonCard()));
+  container.replaceChildren(...ORDER.map(() => {
+    const sk = document.createElement('div');
+    sk.className = 'snapshot-row snapshot-row--skeleton';
+    sk.innerHTML = '<div class="skeleton skeleton-line" style="width:100%;height:52px"></div>';
+    return sk;
+  }));
 
   try {
     const data = await window.apiMeter.getUsage();
