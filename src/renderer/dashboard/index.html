@@ -3,9 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'">
   <title>API-Meter</title>
+  <link rel="stylesheet" href="../shared/styles.css">
 </head>
 <body>
-  <h1>API-Meter</h1>
+  <div class="dashboard">
+    <header class="titlebar">
+      <div class="titlebar-brand">
+        <span class="dot"></span>
+        API-Meter
+      </div>
+      <div class="titlebar-actions">
+        <button class="icon-btn" id="btn-refresh" title="Refresh all">↻</button>
+        <button class="titlebar-btn" id="btn-minimize" title="Minimize">─</button>
+        <button class="titlebar-btn close" id="btn-close" title="Close">✕</button>
+      </div>
+    </header>
+
+    <div class="dashboard-body">
+      <main class="dashboard-main">
+        <div class="dashboard-header">
+          <div>
+            <h1>Mission Control</h1>
+            <p class="subtitle" id="status-line">Initializing telemetry…</p>
+          </div>
+        </div>
+        <div class="grid-3x2" id="provider-grid"></div>
+      </main>
+
+      <aside class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+          <h2 id="detail-title">Provider</h2>
+          <button class="detail-close" id="detail-close" type="button">✕</button>
+        </div>
+        <div class="detail-body" id="detail-body"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="../../../node_modules/chart.js/dist/chart.umd.js"></script>
+  <script type="module" src="dashboard.js"></script>
 </body>
 </html>
