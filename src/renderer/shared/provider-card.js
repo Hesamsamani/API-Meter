@@ -11,6 +11,18 @@ const PROVIDER_META = {
 
 const ORDER = ['claude-ai', 'claude-code', 'gemini', 'perplexity', 'grok', 'cursor'];
 
+const LOGO_BASE = '../../../assets/providers';
+
+function providerLogoHtml(meta, providerId) {
+  const grokClass = meta.label === 'Grok' ? ' provider-logo--grok' : '';
+  const src = providerId ? `${LOGO_BASE}/${providerId}.png` : '';
+  return `
+    <div class="provider-logo${grokClass}">
+      ${src ? `<img class="provider-logo-img" src="${src}" alt="${meta.label}" width="28" height="28" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}
+      <span class="provider-logo-fallback"${src ? ' hidden' : ''}>${meta.initials}</span>
+    </div>`;
+}
+
 function worstUtil(snapshot) {
   if (!snapshot?.windows?.length) return 0;
   return Math.max(...snapshot.windows.map((w) => w.utilization || 0));
@@ -59,7 +71,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
 
   el.innerHTML = `
     <div class="card-header">
-      <div class="provider-logo${meta.label === 'Grok' ? ' provider-logo--grok' : ''}">${meta.initials}</div>
+      ${providerLogoHtml(meta, snapshot?.providerId)}
       <span class="card-title">${meta.label}</span>
       <div class="card-status ${snapshot.source}"></div>
     </div>
@@ -85,7 +97,7 @@ function buildEmptyCard(meta, snapshot, onLogin) {
   const needsLogin = isLoginRequired(snapshot);
   return `
     <div class="card-header">
-      <div class="provider-logo">${meta.initials}</div>
+      ${providerLogoHtml(meta, snapshot?.providerId)}
       <span class="card-title">${meta.label}</span>
       <div class="card-status stale"></div>
     </div>
