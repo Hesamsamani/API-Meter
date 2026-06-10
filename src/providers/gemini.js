@@ -40,12 +40,14 @@ async function fetchLiveGemini() {
   const { session } = require('electron');
   const sid = getSecret('gemini-session');
   if (!sid) throw new Error('Gemini login required');
+  const cookieName = getSecret('gemini-session-cookie-name') || '__Secure-1PSID';
   await session.defaultSession.cookies.set({
     url: 'https://gemini.google.com',
-    name: 'SID',
+    name: cookieName,
     value: sid,
     domain: '.google.com',
     path: '/',
+    secure: true,
   });
   const body = await fetchViaWindow('https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b');
   const dayUsed = Number(body?.dayUsed || body?.quota?.dayUsed || 0);
@@ -75,7 +77,7 @@ function createGeminiAdapter() {
       await openAuthWindow({
         loginUrl: 'https://gemini.google.com/',
         domain: '.google.com',
-        cookieName: 'SID',
+        cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
         secretKey: 'gemini-session',
         title: 'Login to Gemini',
       });
@@ -83,6 +85,7 @@ function createGeminiAdapter() {
     async logout() {
       const { setSecret } = require('../main/store');
       setSecret('gemini-session', '');
+      setSecret('gemini-session-cookie-name', '');
     },
     async fetchUsage() {
       try {

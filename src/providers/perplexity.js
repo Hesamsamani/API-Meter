@@ -27,12 +27,14 @@ async function ensurePerplexityCookies() {
   const { getSecret } = require('../main/store');
   const token = getSecret('perplexity-session');
   if (!token) throw new Error('Perplexity login required');
+  const cookieName = getSecret('perplexity-session-cookie-name') || 'pplx.session';
   await session.defaultSession.cookies.set({
     url: 'https://www.perplexity.ai',
-    name: 'pplx.session',
+    name: cookieName,
     value: token,
     domain: '.perplexity.ai',
     path: '/',
+    secure: cookieName.startsWith('__Secure-'),
   });
 }
 
@@ -50,7 +52,7 @@ function createPerplexityAdapter() {
       await openAuthWindow({
         loginUrl: 'https://www.perplexity.ai/',
         domain: '.perplexity.ai',
-        cookieName: 'pplx.session',
+        cookieNames: ['pplx.session', '__Secure-next-auth.session-token'],
         secretKey: 'perplexity-session',
         title: 'Login to Perplexity',
       });
@@ -58,6 +60,7 @@ function createPerplexityAdapter() {
     async logout() {
       const { setSecret } = require('../main/store');
       setSecret('perplexity-session', '');
+      setSecret('perplexity-session-cookie-name', '');
     },
     async fetchUsage() {
       const { fetchViaWindow } = require('../main/fetch-via-window');

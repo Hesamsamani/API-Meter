@@ -40,4 +40,17 @@ contextBridge.exposeInMainWorld('apiMeter', {
   closeWindow: () => ipcRenderer.send('window:close'),
   showDashboard: () => ipcRenderer.invoke('app:showDashboard'),
   toggleFloatingWidget: () => ipcRenderer.invoke('app:toggleWidget'),
+  cancelAuthPrompt: () => ipcRenderer.invoke('auth-prompt:cancel'),
+  retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),
+  submitAuthPrompt: (value) => ipcRenderer.invoke('auth-prompt:submit', value),
+  onAuthPromptInit: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('auth-prompt:init', listener);
+    return () => ipcRenderer.removeListener('auth-prompt:init', listener);
+  },
+  onAuthPromptStatus: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('auth-prompt:status', listener);
+    return () => ipcRenderer.removeListener('auth-prompt:status', listener);
+  },
 });

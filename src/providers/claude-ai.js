@@ -59,7 +59,7 @@ function createClaudeAiAdapter() {
       await openAuthWindow({
         loginUrl: 'https://claude.ai/login',
         domain: '.claude.ai',
-        cookieName: 'sessionKey',
+        cookieNames: ['sessionKey'],
         secretKey: 'claude-ai-session',
         title: 'Login to Claude.ai',
       });

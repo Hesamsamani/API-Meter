@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'">
+  <title>Browser Login</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    .auth-shell {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 22px;
+      gap: 14px;
+    }
+    .auth-shell h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .auth-shell p {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .auth-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .auth-status.waiting::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .auth-status.ok::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    .auth-status.error::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .auth-manual label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .auth-manual textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 10px 12px;
+    }
+    .auth-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .auth-actions button {
+      flex: 1;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    .auth-actions button.primary {
+      border-color: rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.12);
+    }
+    .auth-actions button:hover { border-color: rgba(255, 255, 255, 0.18); }
+  </style>
+</head>
+<body>
+  <div class="auth-shell">
+    <h1 id="auth-title">Browser Login</h1>
+    <p id="auth-desc">Sign in using your default browser. API-Meter will read the session from Chrome or Edge after you finish.</p>
+    <div class="auth-status waiting" id="auth-status">Waiting for browser sign-in…</div>
+    <div class="auth-manual">
+      <label for="auth-manual-value">Manual session token (fallback)</label>
+      <textarea id="auth-manual-value" placeholder="Paste session cookie value if auto-detect fails"></textarea>
+    </div>
+    <div class="auth-actions">
+      <button type="button" id="auth-cancel">Cancel</button>
+      <button type="button" id="auth-retry" class="primary">Check browser</button>
+      <button type="button" id="auth-save">Save token</button>
+    </div>
+  </div>
+  <script type="module" src="auth-prompt.js"></script>
+</body>
+</html>
