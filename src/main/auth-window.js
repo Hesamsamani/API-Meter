@@ -2,8 +2,6 @@ const { BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const { setSecret } = require('./store');
 const { getPreloadPath } = require('./assets');
-const { readBrowserCookie, diagnoseBrowserCookie } = require('./browser-cookies');
-const { openChromiumUrl } = require('./open-chromium');
 const {
   getProviderSession,
   findSessionCookies,
@@ -68,8 +66,8 @@ function createAuthPromptWindow(opts) {
     win.show();
     sendPrompt('auth-prompt:init', {
       title: opts.title,
-      description: `Sign in using the in-app browser window or Chrome/Edge. API-Meter reads the ${cookieHint} automatically.`,
-      status: 'Waiting for sign-in…',
+      description: `Sign in in the API-Meter browser window. Your ${cookieHint} session is detected automatically when you finish.`,
+      status: 'Waiting for in-app sign-in…',
       mode: 'waiting',
       cookieNameHint: cookieHint,
     });
@@ -80,8 +78,8 @@ function createAuthPromptWindow(opts) {
 
 function createLoginBrowserWindow(opts) {
   const win = new BrowserWindow({
-    width: 520,
-    height: 720,
+    width: 560,
+    height: 780,
     show: true,
     title: opts.title,
     autoHideMenuBar: true,
@@ -94,6 +92,7 @@ function createLoginBrowserWindow(opts) {
   });
   win.webContents.setUserAgent(CHROME_UA);
   win.loadURL(opts.loginUrl);
+  win.focus();
   return win;
 }
 
@@ -124,7 +123,6 @@ async function persistCapturedCookies(opts, hits) {
     }]);
   }
 
-  // Also sync any related session cookies already in the in-app jar
   await syncElectronCookiesToPartition({
     loginUrl: opts.loginUrl,
     domain: opts.domain,
@@ -134,19 +132,7 @@ async function persistCapturedCookies(opts, hits) {
   return primary;
 }
 
-async function tryCaptureCookie(opts) {
-  const names = opts.cookieNames || [opts.cookieName];
-  const hit = readBrowserCookie({
-    cookieNames: names,
-    domain: opts.domain,
-    preferredBrowser: opts.preferredBrowser,
-  });
-  if (!hit?.value) return null;
-  await persistCapturedCookies(opts, [hit]);
-  return hit;
-}
-
-async function tryCaptureElectronCookie(opts) {
+async function tryCaptureInAppCookie(opts) {
   const names = opts.cookieNames || [opts.cookieName];
   const ses = getProviderSession();
   const hits = await findSessionCookies(ses, {
@@ -162,30 +148,14 @@ async function tryCaptureElectronCookie(opts) {
   return captured;
 }
 
-function cookieFailureMessage(opts) {
-  const diag = diagnoseBrowserCookie({
-    cookieNames: opts.cookieNames || [opts.cookieName],
-    domain: opts.domain,
-    preferredBrowser: opts.preferredBrowser,
-  });
-  switch (diag.reason) {
-    case 'unsupported_platform':
-      return 'Use the in-app sign-in window or paste the session token below.';
-    case 'db_locked':
-      return 'Browser cookies are locked. Use the in-app sign-in window or paste the token manually.';
-    case 'v20_encrypted':
-      return 'Chrome encrypted cookies cannot be read from disk. Sign in using the in-app window or paste the token below.';
-    case 'not_found':
-      return 'No session yet. Finish sign-in in the in-app window or Chrome/Edge, then click Check browser.';
-    default:
-      return 'No session found yet. Finish sign-in, then click Check browser.';
-  }
+function waitingMessage() {
+  return 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
 }
 
 async function completeLogin(session, hit) {
   if (!isSessionActive(session)) return;
   session.completed = true;
-  sendPrompt('auth-prompt:status', { status: `Connected via ${hit.browser} (${hit.name})`, mode: 'ok' });
+  sendPrompt('auth-prompt:status', { status: `Connected (${hit.name})`, mode: 'ok' });
   session.resolve?.(hit.value);
   scheduleClosePrompt(session);
 }
@@ -198,17 +168,12 @@ function registerPromptHandlers(session) {
       closePrompt();
     },
     'auth-prompt:retry': async () => {
-      let hit = await tryCaptureElectronCookie(session.opts);
-      if (!isSessionActive(session)) return;
-      if (!hit) hit = await tryCaptureCookie(session.opts);
+      const hit = await tryCaptureInAppCookie(session.opts);
       if (!isSessionActive(session)) return;
       if (hit) {
         await completeLogin(session, hit);
       } else {
-        sendPrompt('auth-prompt:status', {
-          status: cookieFailureMessage(session.opts),
-          mode: 'waiting',
-        });
+        sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
       }
     },
     'auth-prompt:submit': async (_e, payload) => {
@@ -262,33 +227,10 @@ function openAuthWindowInner(opts) {
 
     session.loginWin = createLoginBrowserWindow(opts);
 
-    openChromiumUrl(opts.loginUrl).then(({ browser }) => {
-      session.opts.preferredBrowser = browser === 'default' ? undefined : browser;
-      if (session.cancelled || session.completed) return;
-      sendPrompt('auth-prompt:status', {
-        status: `Opened ${browser === 'default' ? 'default browser' : browser}. Sign in there or in the in-app window.`,
-        mode: 'waiting',
-      });
-      const diag = diagnoseBrowserCookie({
-        cookieNames: opts.cookieNames || [opts.cookieName],
-        domain: opts.domain,
-        preferredBrowser: session.opts.preferredBrowser,
-      });
-      if (diag.reason === 'v20_encrypted') {
-        sendPrompt('auth-prompt:status', {
-          status: 'Chrome encrypted cookies detected — use the in-app sign-in window (recommended).',
-          mode: 'waiting',
-        });
-      }
-    }).catch((err) => {
-      session.reject(err);
-      closePrompt();
-    });
-
     if (Notification.isSupported()) {
       new Notification({
         title: opts.title,
-        body: 'Sign in using the in-app browser window or Chrome/Edge.',
+        body: 'Sign in using the API-Meter browser window.',
       }).show();
     }
 
@@ -296,9 +238,7 @@ function openAuthWindowInner(opts) {
       if (!isSessionActive(session) || session.polling) return;
       session.polling = true;
       try {
-        let hit = await tryCaptureElectronCookie(opts);
-        if (!isSessionActive(session)) return;
-        if (!hit) hit = await tryCaptureCookie(opts);
+        const hit = await tryCaptureInAppCookie(opts);
         if (!isSessionActive(session)) return;
         if (hit) await completeLogin(session, hit);
       } finally {
@@ -306,26 +246,31 @@ function openAuthWindowInner(opts) {
       }
     };
 
-    session.timer = setInterval(() => { poll().catch(() => {}); }, 2000);
+    session.timer = setInterval(() => { poll().catch(() => {}); }, 1500);
     poll().catch(() => {});
 
-    win.on('closed', () => {
+    session.loginWin.on('closed', () => {
       if (!session.completed && !session.cancelled) {
         session.reject?.(new Error('Login window closed'));
       }
       cleanupSession(session);
+      if (win && !win.isDestroyed()) win.close();
+    });
+
+    win.on('closed', () => {
+      if (activePrompt?.session === session) activePrompt = null;
     });
 
     setTimeout(() => {
       if (session.cancelled || session.completed || activePrompt?.session !== session) return;
-      sendPrompt('auth-prompt:status', {
-        status: cookieFailureMessage(opts),
-        mode: 'waiting',
-      });
-    }, 20000);
+      sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+    }, 15000);
   });
 }
 
+/**
+ * Opens an in-app browser for login and reads session cookies from the Electron session jar.
+ */
 function openAuthWindow(opts) {
   const key = opts.secretKey || opts.domain || 'default';
   const prev = loginQueues.get(key) || Promise.resolve();
@@ -334,4 +279,4 @@ function openAuthWindow(opts) {
   return run;
 }
 
-module.exports = { openAuthWindow, tryCaptureCookie };
+module.exports = { openAuthWindow };

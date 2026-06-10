@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'">
-  <title>Browser Login</title>
+  <title>Sign In</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
     .auth-shell {
@@ -126,18 +126,18 @@
 </head>
 <body>
   <div class="auth-shell">
-    <h1 id="auth-title">Browser Login</h1>
-    <p id="auth-desc">Sign in using the in-app browser window or Chrome/Edge. API-Meter detects the session automatically.</p>
-    <div class="auth-status waiting" id="auth-status">Waiting for browser sign-in…</div>
+    <h1 id="auth-title">Sign In</h1>
+    <p id="auth-desc">Use the API-Meter browser window to sign in. Your session is detected automatically when you finish.</p>
+    <div class="auth-status waiting" id="auth-status">Waiting for in-app sign-in…</div>
     <div class="auth-manual">
-      <label for="auth-cookie-name">Cookie name (optional)</label>
+      <label for="auth-cookie-name">Cookie name (optional fallback)</label>
       <input id="auth-cookie-name" type="text" placeholder="e.g. sessionKey, __Secure-1PSID" autocomplete="off">
-      <label for="auth-manual-value">Session token (fallback)</label>
-      <textarea id="auth-manual-value" placeholder="DevTools → Application → Cookies → copy Value"></textarea>
+      <label for="auth-manual-value">Session token (manual fallback)</label>
+      <textarea id="auth-manual-value" placeholder="Only if in-app sign-in fails — paste cookie value here"></textarea>
     </div>
     <div class="auth-actions">
       <button type="button" id="auth-cancel">Cancel</button>
-      <button type="button" id="auth-retry" class="primary">Check browser</button>
+      <button type="button" id="auth-retry" class="primary">Check session</button>
       <button type="button" id="auth-save">Save token</button>
     </div>
   </div>
