@@ -1,4 +1,4 @@
-const { BrowserWindow, ipcMain, Notification } = require('electron');
+const { BrowserWindow, ipcMain, Notification, clipboard } = require('electron');
 const path = require('path');
 const { setSecret } = require('./store');
 const { getPreloadPath } = require('./assets');
@@ -14,6 +14,7 @@ const {
   looksLikeCookiePaste,
   importCookiesFromPaste,
   verifyImportedSession,
+  formatImportSummary,
 } = require('./cookie-import');
 const { CHROME_UA } = require('../shared/ua');
 
@@ -52,7 +53,7 @@ function closePrompt() {
 function createAuthPromptWindow(opts) {
   const win = new BrowserWindow({
     width: 440,
-    height: 520,
+    height: 540,
     show: false,
     resizable: false,
     frame: false,
@@ -183,9 +184,11 @@ function waitingMessage() {
 async function completeLogin(session, hit, extra = {}) {
   if (!isSessionActive(session)) return;
   session.completed = true;
-  const label = extra.imported
-    ? `Connected — ${extra.imported} cookie${extra.imported === 1 ? '' : 's'} imported (${hit.name})`
-    : `Connected (${hit.name})`;
+  const label = extra.summary
+    ? `Connected — ${extra.summary}`
+    : extra.imported
+      ? `Connected — ${extra.imported} cookie${extra.imported === 1 ? '' : 's'} imported (${hit.name})`
+      : `Connected (${hit.name})`;
   sendPrompt('auth-prompt:status', { status: label, mode: 'ok' });
   session.resolve?.(hit.value);
   scheduleClosePrompt(session);
@@ -209,7 +212,7 @@ async function handleCookiePaste(session, raw) {
     }
   }
 
-  await completeLogin(session, result.primary, { imported: result.imported });
+  await completeLogin(session, result.primary, { summary: formatImportSummary(result) });
 }
 
 async function handleManualToken(session, token, cookieName) {
@@ -234,14 +237,28 @@ function registerPromptHandlers(session) {
       session.tab = tab === 'paste' ? 'paste' : 'browser';
       if (session.tab === 'paste') {
         closeLoginBrowser(session);
+        const clip = clipboard.readText();
+        const hasExport = looksLikeCookiePaste(clip);
         sendPrompt('auth-prompt:status', {
-          status: 'Paste cookies from DevTools, then click Import & connect.',
+          status: hasExport
+            ? 'EditThisCookie export detected in clipboard — review and click Import.'
+            : 'Export cookies in EditThisCookie, then paste or Read clipboard.',
           mode: 'waiting',
         });
+        if (hasExport) {
+          sendPrompt('auth-prompt:clipboard', { text: clip, detected: true });
+        }
       } else {
         openLoginBrowser(session);
         sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
       }
+    },
+    'auth-prompt:read-clipboard': () => {
+      const text = clipboard.readText();
+      return {
+        text,
+        detected: looksLikeCookiePaste(text),
+      };
     },
     'auth-prompt:retry': async () => {
       const hit = await tryCaptureInAppCookie(session.opts);

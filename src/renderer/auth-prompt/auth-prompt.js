@@ -5,12 +5,18 @@ const pasteEl = document.getElementById('auth-cookie-paste');
 const cookieNameEl = document.getElementById('auth-cookie-name');
 const cookieHintEl = document.getElementById('auth-cookie-hint');
 const importBtn = document.getElementById('auth-import');
+const readClipBtn = document.getElementById('auth-read-clipboard');
+const scanMetaEl = document.getElementById('auth-scan-meta');
 
 let activeTab = 'browser';
 
 function setStatus(text, mode = 'waiting') {
   statusEl.textContent = text;
   statusEl.className = `auth-status ${mode}`;
+}
+
+function setScanMeta(text) {
+  if (scanMetaEl) scanMetaEl.textContent = text || '';
 }
 
 function setTab(tab) {
@@ -26,6 +32,17 @@ function setTab(tab) {
   window.apiMeter.setAuthTab?.(activeTab);
 }
 
+function applyClipboardPayload(payload) {
+  if (!payload?.text || !pasteEl) return;
+  pasteEl.value = payload.text;
+  if (payload.detected) {
+    setScanMeta('Clipboard scan: cookie export detected');
+    setStatus('EditThisCookie export loaded — click Import & connect.', 'waiting');
+  } else {
+    setScanMeta('Clipboard loaded — no cookie export pattern detected');
+  }
+}
+
 document.querySelectorAll('.auth-tab').forEach((btn) => {
   btn.addEventListener('click', () => setTab(btn.dataset.tab));
 });
@@ -35,9 +52,9 @@ window.apiMeter.onAuthPromptInit?.((payload) => {
   descEl.textContent = payload.description || descEl.textContent;
   setStatus(payload.status || 'Waiting for in-app sign-in…', payload.mode || 'waiting');
   if (payload.cookieNameHint && cookieHintEl) {
-    cookieHintEl.textContent = `Looking for: ${payload.cookieNameHint}`;
+    cookieHintEl.textContent = `Session cookies: ${payload.cookieNameHint}`;
     if (cookieNameEl && !cookieNameEl.placeholder.includes(payload.cookieNameHint)) {
-      cookieNameEl.placeholder = `e.g. ${payload.cookieNameHint.split(',')[0].trim()}`;
+      cookieNameEl.placeholder = `Only if pasting a single value — e.g. ${payload.cookieNameHint.split(',')[0].trim()}`;
     }
   }
 });
@@ -47,23 +64,40 @@ window.apiMeter.onAuthPromptStatus?.((payload) => {
   if (importBtn) importBtn.disabled = false;
 });
 
+window.apiMeter.onAuthPromptClipboard?.((payload) => {
+  applyClipboardPayload(payload);
+});
+
+async function readClipboard() {
+  try {
+    const payload = await window.apiMeter.readClipboardCookies?.();
+    if (!payload?.text) {
+      setStatus('Clipboard is empty.', 'error');
+      return;
+    }
+    applyClipboardPayload(payload);
+  } catch (err) {
+    setStatus(`Clipboard read failed: ${err.message || err}`, 'error');
+  }
+}
+
 function submitPaste() {
   const value = pasteEl?.value?.trim() || '';
-  const fallback = document.getElementById('auth-manual-value');
   const singleName = cookieNameEl?.value?.trim() || '';
 
-  if (!value && !fallback?.value?.trim()) {
-    setStatus('Paste the site cookie string first.', 'error');
+  if (!value) {
+    setStatus('Paste EditThisCookie export or click Read clipboard.', 'error');
     return;
   }
 
   if (importBtn) importBtn.disabled = true;
-  setStatus('Importing cookies…', 'waiting');
+  setScanMeta('');
+  setStatus('Scanning export and importing cookies…', 'waiting');
 
   window.apiMeter.submitAuthPrompt({
-    value: value || fallback?.value?.trim(),
+    value,
     cookieName: singleName,
-    mode: value ? 'paste' : 'token',
+    mode: 'paste',
   });
 }
 
@@ -80,6 +114,7 @@ document.getElementById('auth-retry')?.addEventListener('click', () => {
 });
 
 document.getElementById('auth-import')?.addEventListener('click', submitPaste);
+readClipBtn?.addEventListener('click', readClipboard);
 
 pasteEl?.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

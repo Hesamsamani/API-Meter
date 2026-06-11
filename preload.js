@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),
   submitAuthPrompt: (value) => ipcRenderer.invoke('auth-prompt:submit', value),
   setAuthTab: (tab) => ipcRenderer.invoke('auth-prompt:set-tab', tab),
+  readClipboardCookies: () => ipcRenderer.invoke('auth-prompt:read-clipboard'),
   onAuthPromptInit: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('auth-prompt:init', listener);
@@ -38,5 +39,10 @@ contextBridge.exposeInMainWorld('apiMeter', {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('auth-prompt:status', listener);
     return () => ipcRenderer.removeListener('auth-prompt:status', listener);
+  },
+  onAuthPromptClipboard: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('auth-prompt:clipboard', listener);
+    return () => ipcRenderer.removeListener('auth-prompt:clipboard', listener);
   },
 });

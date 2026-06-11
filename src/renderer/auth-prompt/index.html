@@ -158,6 +158,17 @@
       line-height: 1.4;
       font-family: var(--font-mono);
     }
+    .auth-hint.auth-scan {
+      color: rgba(34, 197, 94, 0.85);
+      margin-top: 4px;
+      min-height: 12px;
+    }
+    .auth-field--compact { margin-top: -4px; }
+    .auth-actions--paste button { font-size: 9px; padding: 8px 6px; }
+    .auth-actions--paste button#auth-read-clipboard {
+      border-color: rgba(66, 133, 244, 0.35);
+      background: rgba(66, 133, 244, 0.1);
+    }
     .auth-actions {
       display: flex;
       gap: 7px;
@@ -218,25 +229,26 @@
 
     <section class="auth-panel" id="panel-paste" role="tabpanel" aria-labelledby="tab-paste">
       <div class="auth-steps">
-        <strong>How to copy cookies</strong>
+        <strong>EditThisCookie export</strong>
         <ol>
-          <li>Open the site in Chrome → DevTools (F12) → Application → Cookies.</li>
-          <li>Copy as <code>name=value; …</code> or export all cookies for the domain.</li>
-          <li>Paste below — we import every cookie and fetch usage data.</li>
+          <li>On the provider site, open EditThisCookie → <code>Export</code>.</li>
+          <li>JSON is copied to clipboard (all cookies for that page).</li>
+          <li>Click <em>Read clipboard</em> or paste below — we scan and pick the session cookie.</li>
         </ol>
       </div>
       <div class="auth-field">
-        <label for="auth-cookie-paste">Cookie string</label>
-        <textarea id="auth-cookie-paste" placeholder="sessionKey=…; other=…&#10;or paste JSON / Netscape export" spellcheck="false" autocomplete="off"></textarea>
-        <p class="auth-hint" id="auth-cookie-hint">Looking for: sessionKey, anthropic-session</p>
+        <label for="auth-cookie-paste">Cookie export</label>
+        <textarea id="auth-cookie-paste" placeholder="Paste EditThisCookie JSON export here…" spellcheck="false" autocomplete="off"></textarea>
+        <p class="auth-hint" id="auth-cookie-hint">Session cookies: sessionKey, anthropic-session</p>
+        <p class="auth-hint auth-scan" id="auth-scan-meta"></p>
       </div>
-      <div class="auth-field">
-        <label for="auth-cookie-name">Single token fallback (optional)</label>
-        <input id="auth-cookie-name" type="text" placeholder="Cookie name if pasting value only" autocomplete="off">
-        <textarea id="auth-manual-value" hidden aria-hidden="true"></textarea>
+      <div class="auth-field auth-field--compact">
+        <label for="auth-cookie-name">Single value only (optional)</label>
+        <input id="auth-cookie-name" type="text" placeholder="Cookie name when pasting one token" autocomplete="off">
       </div>
-      <div class="auth-actions">
+      <div class="auth-actions auth-actions--paste">
         <button type="button" id="auth-cancel-paste">Cancel</button>
+        <button type="button" id="auth-read-clipboard">Read clipboard</button>
         <button type="button" id="auth-import" class="primary">Import &amp; connect</button>
       </div>
     </section>
