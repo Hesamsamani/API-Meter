@@ -5,7 +5,7 @@ import {
   getVisibleOrder,
   worstUtil,
 } from '../shared/provider-card.js';
-import { setAlertThresholds } from '../../../shared/alert-thresholds.js';
+import { setAlertThresholds } from '../shared/alert-thresholds.js';
 
 const container = document.getElementById('popover-cards');
 const lastFingerprints = new Map();

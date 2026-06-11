@@ -45,6 +45,18 @@
   </div>
 
   <script src="../../../node_modules/chart.js/dist/chart.umd.js"></script>
+  <script>
+    window.addEventListener('error', (e) => {
+      const line = document.getElementById('status-line');
+      if (line) line.textContent = `UI error: ${e.message || 'Failed to load dashboard'}`;
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const line = document.getElementById('status-line');
+      if (line && line.textContent.startsWith('Initializing')) {
+        line.textContent = `UI error: ${e.reason?.message || e.reason || 'Unhandled rejection'}`;
+      }
+    });
+  </script>
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>

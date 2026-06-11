@@ -9,7 +9,7 @@ import {
   isLoginRequired,
   worstUtil,
 } from '../shared/provider-card.js';
-import { setAlertThresholds, thresholdClass } from '../../../shared/alert-thresholds.js';
+import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
 
 const grid = document.getElementById('provider-grid');
 const detailPanel = document.getElementById('detail-panel');
@@ -292,6 +292,10 @@ function applySettings(settings) {
 }
 
 async function init() {
+  if (!window.apiMeter?.getUsage) {
+    statusLine.textContent = 'API bridge not ready — restart the app';
+    return;
+  }
   showSkeletons();
   btnMinimize?.addEventListener('click', () => window.apiMeter.minimizeWindow());
   btnClose?.addEventListener('click', () => window.apiMeter.closeWindow());

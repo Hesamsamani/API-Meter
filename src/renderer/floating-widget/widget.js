@@ -6,7 +6,7 @@ import {
   worstUtil,
   getVisibleOrder,
 } from '../shared/provider-card.js';
-import { setAlertThresholds, thresholdClass } from '../../../shared/alert-thresholds.js';
+import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
 
 const root = document.getElementById('widget-root');
 const body = document.getElementById('widget-body');

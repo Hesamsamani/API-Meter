@@ -1,4 +1,4 @@
-import { thresholdClass } from '../../../shared/alert-thresholds.js';
+import { thresholdClass } from './alert-thresholds.js';
 
 export function renderGauge(utilization = 0, { size = 88, stroke = 6, variant = 'full' } = {}) {
   const clamped = Math.max(0, Math.min(100, utilization));

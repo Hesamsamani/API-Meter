@@ -1,6 +1,6 @@
 import { renderGauge, updateGauge } from './gauge.js';
-import { isAuthErrorMessage } from '../../../shared/auth-errors.js';
-import { thresholdClass } from '../../../shared/alert-thresholds.js';
+import { isAuthErrorMessage } from './auth-errors.js';
+import { thresholdClass } from './alert-thresholds.js';
 
 const PROVIDER_META = {
   'claude-ai': { label: 'Claude', accent: 'var(--claude-ai)', initials: 'CL' },
