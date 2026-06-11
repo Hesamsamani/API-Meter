@@ -50,11 +50,42 @@
 
       <section class="settings-section">
         <h2>Floating Widget</h2>
+        <label class="field-row">
+          <span>Display mode</span>
+          <select id="widget-display-mode">
+            <option value="single">Single provider</option>
+            <option value="grid">Grid (all pinned)</option>
+            <option value="compact">Compact list</option>
+          </select>
+        </label>
+        <label class="field-row">
+          <span>Size</span>
+          <select id="widget-size">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+        </label>
+        <label class="field-row">
+          <span>Theme</span>
+          <select id="widget-theme">
+            <option value="dark">Dark</option>
+            <option value="midnight">Midnight</option>
+            <option value="glass">Glass</option>
+            <option value="light">Light</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </label>
+        <label class="field-row">
+          <span>Opacity</span>
+          <input type="range" id="widget-opacity" min="50" max="100" step="5">
+        </label>
         <label class="field-check">
           <input type="checkbox" id="widget-auto-rotate">
-          <span>Auto-rotate providers (10s)</span>
+          <span>Auto-rotate (single mode, 10s)</span>
         </label>
-        <p class="field-hint">Pin providers from the dashboard detail panel in a future update. Toggle widget from tray.</p>
+        <p class="field-hint">Pin providers to control what appears in grid/list mode. Use −/+ and ◐ on the widget for quick resize and theme. Toggle widget from tray.</p>
+        <div class="widget-pin-grid" id="widget-pin-grid"></div>
       </section>
 
       <section class="settings-section">

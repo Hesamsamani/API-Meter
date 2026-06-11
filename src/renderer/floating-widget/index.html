@@ -7,17 +7,26 @@
   <title>API-Meter Widget</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
-    html, body { background: transparent; }
+    html, body { background: transparent; margin: 0; height: 100%; overflow: hidden; }
   </style>
 </head>
 <body>
-  <div class="widget">
+  <div class="widget" id="widget-root" data-theme="dark" data-size="medium" data-mode="single">
     <header class="widget-header">
-      <span>API-Meter</span>
-      <button class="widget-close" id="widget-close" type="button">✕</button>
+      <span class="widget-brand">API-Meter</span>
+      <div class="widget-toolbar">
+        <button class="widget-btn" id="widget-smaller" type="button" title="Smaller">−</button>
+        <button class="widget-btn" id="widget-larger" type="button" title="Larger">+</button>
+        <button class="widget-btn" id="widget-theme" type="button" title="Cycle theme">◐</button>
+        <button class="widget-btn widget-close" id="widget-close" type="button" title="Close">✕</button>
+      </div>
     </header>
     <div class="widget-body" id="widget-body"></div>
-    <div class="widget-dots" id="widget-dots"></div>
+    <footer class="widget-footer" id="widget-footer">
+      <button class="widget-nav" id="widget-prev" type="button" aria-label="Previous">‹</button>
+      <div class="widget-dots" id="widget-dots"></div>
+      <button class="widget-nav" id="widget-next" type="button" aria-label="Next">›</button>
+    </footer>
   </div>
   <script type="module" src="widget.js"></script>
 </body>

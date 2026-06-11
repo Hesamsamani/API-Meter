@@ -7,7 +7,15 @@ const settings = new Store({
     autoRefreshEnabled: true,
     theme: 'dark',
     launchAtStartup: false,
-    floatingWidget: { enabled: false, pinnedProviders: [], autoRotate: false },
+    floatingWidget: {
+      enabled: false,
+      pinnedProviders: [],
+      autoRotate: false,
+      displayMode: 'single',
+      size: 'medium',
+      theme: 'dark',
+      opacity: 0.92,
+    },
     alerts: { enabled: true, warnThreshold: 75, dangerThreshold: 90 },
     providers: {
       'claude-ai': { enabled: true },

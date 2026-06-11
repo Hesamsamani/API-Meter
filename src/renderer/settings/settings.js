@@ -2,6 +2,7 @@ import { ORDER, PROVIDER_META } from '../shared/provider-card.js';
 
 const form = document.getElementById('settings-form');
 const providerToggles = document.getElementById('provider-toggles');
+const widgetPinGrid = document.getElementById('widget-pin-grid');
 const btnClose = document.getElementById('btn-close');
 
 let current = {};
@@ -20,15 +21,36 @@ function renderProviderToggles(providers) {
   });
 }
 
+function renderWidgetPins(pinned = []) {
+  if (!widgetPinGrid) return;
+  widgetPinGrid.replaceChildren();
+  ORDER.forEach((id) => {
+    const meta = PROVIDER_META[id];
+    const label = document.createElement('label');
+    label.className = 'field-check widget-pin';
+    label.innerHTML = `
+      <input type="checkbox" data-widget-pin="${id}" ${pinned.includes(id) ? 'checked' : ''}>
+      <span>${meta.label}</span>
+    `;
+    widgetPinGrid.appendChild(label);
+  });
+}
+
 function populateForm(settings) {
   current = settings;
+  const fw = settings.floatingWidget || {};
   document.getElementById('refresh-interval').value = settings.refreshIntervalMinutes ?? 5;
   document.getElementById('auto-refresh').checked = settings.autoRefreshEnabled !== false;
   document.getElementById('alerts-enabled').checked = settings.alerts?.enabled !== false;
   document.getElementById('warn-threshold').value = settings.alerts?.warnThreshold ?? 75;
   document.getElementById('danger-threshold').value = settings.alerts?.dangerThreshold ?? 90;
-  document.getElementById('widget-auto-rotate').checked = settings.floatingWidget?.autoRotate === true;
+  document.getElementById('widget-auto-rotate').checked = fw.autoRotate === true;
+  document.getElementById('widget-display-mode').value = fw.displayMode || 'single';
+  document.getElementById('widget-size').value = fw.size || 'medium';
+  document.getElementById('widget-theme').value = fw.theme || 'dark';
+  document.getElementById('widget-opacity').value = Math.round((fw.opacity ?? 0.92) * 100);
   renderProviderToggles(settings.providers || {});
+  renderWidgetPins(fw.pinnedProviders || []);
 }
 
 function collectPatch() {
@@ -36,6 +58,11 @@ function collectPatch() {
   providerToggles.querySelectorAll('[data-provider]').forEach((input) => {
     const id = input.dataset.provider;
     providers[id] = { ...(providers[id] || {}), enabled: input.checked };
+  });
+
+  const pinnedProviders = [];
+  widgetPinGrid?.querySelectorAll('[data-widget-pin]').forEach((input) => {
+    if (input.checked) pinnedProviders.push(input.dataset.widgetPin);
   });
 
   return {
@@ -50,6 +77,11 @@ function collectPatch() {
     floatingWidget: {
       ...(current.floatingWidget || {}),
       autoRotate: document.getElementById('widget-auto-rotate').checked,
+      displayMode: document.getElementById('widget-display-mode').value,
+      size: document.getElementById('widget-size').value,
+      theme: document.getElementById('widget-theme').value,
+      opacity: Number(document.getElementById('widget-opacity').value) / 100,
+      pinnedProviders,
     },
     providers,
   };

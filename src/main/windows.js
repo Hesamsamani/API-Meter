@@ -1,6 +1,7 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
+const { normalizeWidgetSettings, computeWidgetBounds } = require('../shared/widget-presets');
 
 function preloadPath() {
   return getPreloadPath();
@@ -83,10 +84,19 @@ function createSettingsWindow() {
   return win;
 }
 
-function createFloatingWidget() {
+function applyWidgetWindowBounds(win, fwSettings, providerCount = 1) {
+  if (!win || win.isDestroyed()) return;
+  const fw = normalizeWidgetSettings(fwSettings);
+  const { width, height } = computeWidgetBounds(fw, providerCount);
+  win.setSize(Math.round(width), Math.round(height));
+}
+
+function createFloatingWidget(fwSettings = {}) {
+  const fw = normalizeWidgetSettings(fwSettings);
+  const { width, height } = computeWidgetBounds(fw, 1);
   const win = new BrowserWindow({
-    width: 280,
-    height: 200,
+    width: Math.round(width),
+    height: Math.round(height),
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -143,13 +153,14 @@ function showPopover(getOrCreate, { onShow } = {}) {
   return win;
 }
 
-function toggleFloatingWidget({ getWin, createWin, settings }) {
+function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }) {
   let win = getWin();
   if (!win || win.isDestroyed()) win = createWin();
   if (win.isVisible()) {
     win.hide();
     settings.set('floatingWidget.enabled', false);
   } else {
+    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
     win.show();
     settings.set('floatingWidget.enabled', true);
   }
@@ -165,5 +176,6 @@ module.exports = {
   showPopover,
   showSettings,
   toggleFloatingWidget,
+  applyWidgetWindowBounds,
   positionNearTray,
 };

@@ -16,7 +16,14 @@ const {
   showPopover,
   showSettings,
   toggleFloatingWidget,
+  applyWidgetWindowBounds,
 } = require('./src/main/windows');
+const {
+  normalizeWidgetSettings,
+  nextSize,
+  prevSize,
+  nextTheme,
+} = require('./src/shared/widget-presets');
 
 let store;
 let scheduler;
@@ -148,12 +155,35 @@ function registerIpc() {
     floatingWin = toggleFloatingWidget({
       getWin: () => floatingWin,
       createWin: () => {
-        floatingWin = createFloatingWidget();
+        floatingWin = createFloatingWidget(settings.get('floatingWidget'));
         return floatingWin;
       },
       settings,
     });
     return settings.get('floatingWidget.enabled');
+  });
+
+  ipcMain.handle('widget:fitWindow', (e, providerCount = 1) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return null;
+    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
+    return win.getSize();
+  });
+
+  ipcMain.handle('widget:resize', (e, direction = 1) => {
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const next = direction > 0 ? nextSize(fw.size) : prevSize(fw.size);
+    settings.set('floatingWidget', { ...fw, size: next });
+    broadcastSettings();
+    return next;
+  });
+
+  ipcMain.handle('widget:cycleTheme', () => {
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const theme = nextTheme(fw.theme);
+    settings.set('floatingWidget', { ...fw, theme });
+    broadcastSettings();
+    return theme;
   });
 }
 
@@ -250,7 +280,7 @@ app.whenReady().then(() => {
   });
 
   if (settings.get('floatingWidget.enabled')) {
-    floatingWin = createFloatingWidget();
+    floatingWin = createFloatingWidget(settings.get('floatingWidget'));
     floatingWin.show();
   }
 });
