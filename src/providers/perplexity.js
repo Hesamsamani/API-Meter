@@ -62,6 +62,7 @@ function createPerplexityAdapter() {
         cookieNames: ['pplx.session', '__Secure-next-auth.session-token'],
         secretKey: 'perplexity-session',
         title: 'Login to Perplexity',
+        probeUrl: 'https://www.perplexity.ai/rest/rate-limit/all',
       });
     },
     async logout() {

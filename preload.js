@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   cancelAuthPrompt: () => ipcRenderer.invoke('auth-prompt:cancel'),
   retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),
   submitAuthPrompt: (value) => ipcRenderer.invoke('auth-prompt:submit', value),
+  setAuthTab: (tab) => ipcRenderer.invoke('auth-prompt:set-tab', tab),
   onAuthPromptInit: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('auth-prompt:init', listener);

@@ -84,6 +84,7 @@ function createClaudeAiAdapter() {
         cookieNames: ['anthropic-session', 'sessionKey'],
         secretKey: 'claude-ai-session',
         title: 'Login to Claude.ai',
+        probeUrl: 'https://claude.ai/api/organizations',
       });
     },
     async logout() {

@@ -10,6 +10,11 @@ const {
   flushCookies,
   syncElectronCookiesToPartition,
 } = require('./provider-session');
+const {
+  looksLikeCookiePaste,
+  importCookiesFromPaste,
+  verifyImportedSession,
+} = require('./cookie-import');
 const { CHROME_UA } = require('../shared/ua');
 
 let activePrompt = null;
@@ -46,8 +51,8 @@ function closePrompt() {
 
 function createAuthPromptWindow(opts) {
   const win = new BrowserWindow({
-    width: 420,
-    height: 400,
+    width: 440,
+    height: 520,
     show: false,
     resizable: false,
     frame: false,
@@ -66,10 +71,11 @@ function createAuthPromptWindow(opts) {
     win.show();
     sendPrompt('auth-prompt:init', {
       title: opts.title,
-      description: `Sign in in the API-Meter browser window. Your ${cookieHint} session is detected automatically when you finish.`,
+      description: 'Sign in with the in-app browser, or paste cookies copied from your browser.',
       status: 'Waiting for in-app sign-in…',
       mode: 'waiting',
       cookieNameHint: cookieHint,
+      loginUrl: opts.loginUrl,
     });
   });
 
@@ -98,6 +104,28 @@ function createLoginBrowserWindow(opts) {
 
 function isSessionActive(session) {
   return !session.cancelled && !session.completed;
+}
+
+function openLoginBrowser(session) {
+  if (session.loginWin && !session.loginWin.isDestroyed()) return session.loginWin;
+  session.loginWin = createLoginBrowserWindow(session.opts);
+  session.loginWin.on('closed', () => {
+    session.loginWin = null;
+    if (!session.completed && !session.cancelled && session.tab === 'browser') {
+      session.reject?.(new Error('Login window closed'));
+      cleanupSession(session);
+      if (activePrompt?.win && !activePrompt.win.isDestroyed()) activePrompt.win.close();
+    }
+  });
+  return session.loginWin;
+}
+
+function closeLoginBrowser(session) {
+  if (session.loginWin && !session.loginWin.isDestroyed()) {
+    session.loginWin.removeAllListeners('closed');
+    session.loginWin.close();
+  }
+  session.loginWin = null;
 }
 
 async function persistCapturedCookies(opts, hits) {
@@ -152,11 +180,46 @@ function waitingMessage() {
   return 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
 }
 
-async function completeLogin(session, hit) {
+async function completeLogin(session, hit, extra = {}) {
   if (!isSessionActive(session)) return;
   session.completed = true;
-  sendPrompt('auth-prompt:status', { status: `Connected (${hit.name})`, mode: 'ok' });
+  const label = extra.imported
+    ? `Connected — ${extra.imported} cookie${extra.imported === 1 ? '' : 's'} imported (${hit.name})`
+    : `Connected (${hit.name})`;
+  sendPrompt('auth-prompt:status', { status: label, mode: 'ok' });
   session.resolve?.(hit.value);
+  scheduleClosePrompt(session);
+}
+
+async function handleCookiePaste(session, raw) {
+  sendPrompt('auth-prompt:status', { status: 'Importing cookies…', mode: 'waiting' });
+  const result = await importCookiesFromPaste(session.opts, raw);
+  if (!isSessionActive(session)) return;
+
+  if (session.opts.probeUrl) {
+    sendPrompt('auth-prompt:status', { status: 'Verifying session…', mode: 'waiting' });
+    try {
+      await verifyImportedSession(session.opts);
+    } catch (err) {
+      sendPrompt('auth-prompt:status', {
+        status: `Cookies imported but verification failed: ${err.message || err}`,
+        mode: 'error',
+      });
+      return;
+    }
+  }
+
+  await completeLogin(session, result.primary, { imported: result.imported });
+}
+
+async function handleManualToken(session, token, cookieName) {
+  const defaultName = (session.opts.cookieNames || [session.opts.cookieName]).filter(Boolean)[0];
+  const resolvedName = cookieName || defaultName;
+  await persistCapturedCookies(session.opts, { value: token, name: resolvedName, browser: 'manual' });
+  if (!isSessionActive(session)) return;
+  session.completed = true;
+  sendPrompt('auth-prompt:status', { status: 'Session saved manually.', mode: 'ok' });
+  session.resolve?.(token);
   scheduleClosePrompt(session);
 }
 
@@ -166,6 +229,19 @@ function registerPromptHandlers(session) {
       session.cancelled = true;
       session.reject?.(new Error('Login cancelled'));
       closePrompt();
+    },
+    'auth-prompt:set-tab': (_e, tab) => {
+      session.tab = tab === 'paste' ? 'paste' : 'browser';
+      if (session.tab === 'paste') {
+        closeLoginBrowser(session);
+        sendPrompt('auth-prompt:status', {
+          status: 'Paste cookies from DevTools, then click Import & connect.',
+          mode: 'waiting',
+        });
+      } else {
+        openLoginBrowser(session);
+        sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+      }
     },
     'auth-prompt:retry': async () => {
       const hit = await tryCaptureInAppCookie(session.opts);
@@ -177,22 +253,30 @@ function registerPromptHandlers(session) {
       }
     },
     'auth-prompt:submit': async (_e, payload) => {
-      const token = String((typeof payload === 'object' ? payload?.value : payload) || '').trim();
+      const raw = String((typeof payload === 'object' ? payload?.value : payload) || '').trim();
       const cookieName = typeof payload === 'object'
         ? String(payload?.cookieName || '').trim()
         : '';
-      if (!token) {
-        sendPrompt('auth-prompt:status', { status: 'Paste a session token first.', mode: 'error' });
+      const mode = typeof payload === 'object' ? payload?.mode : '';
+
+      if (!raw) {
+        sendPrompt('auth-prompt:status', { status: 'Paste cookies or a session token first.', mode: 'error' });
         return;
       }
-      const defaultName = (session.opts.cookieNames || [session.opts.cookieName]).filter(Boolean)[0];
-      const resolvedName = cookieName || defaultName;
-      await persistCapturedCookies(session.opts, { value: token, name: resolvedName, browser: 'manual' });
-      if (!isSessionActive(session)) return;
-      session.completed = true;
-      sendPrompt('auth-prompt:status', { status: 'Session saved manually.', mode: 'ok' });
-      session.resolve?.(token);
-      scheduleClosePrompt(session);
+
+      try {
+        if (mode === 'paste' || looksLikeCookiePaste(raw)) {
+          await handleCookiePaste(session, raw);
+          return;
+        }
+        await handleManualToken(session, raw, cookieName);
+      } catch (err) {
+        if (!isSessionActive(session)) return;
+        sendPrompt('auth-prompt:status', {
+          status: err.message || String(err),
+          mode: 'error',
+        });
+      }
     },
   };
 
@@ -219,23 +303,24 @@ function openAuthWindowInner(opts) {
       ipcIds: [],
       cleaned: false,
       loginWin: null,
+      tab: 'browser',
     };
 
     const win = createAuthPromptWindow(opts);
     session.ipcIds = registerPromptHandlers(session);
     activePrompt = { win, session };
 
-    session.loginWin = createLoginBrowserWindow(opts);
+    openLoginBrowser(session);
 
     if (Notification.isSupported()) {
       new Notification({
         title: opts.title,
-        body: 'Sign in using the API-Meter browser window.',
+        body: 'Sign in using the API-Meter browser window, or paste cookies.',
       }).show();
     }
 
     const poll = async () => {
-      if (!isSessionActive(session) || session.polling) return;
+      if (!isSessionActive(session) || session.polling || session.tab !== 'browser') return;
       session.polling = true;
       try {
         const hit = await tryCaptureInAppCookie(opts);
@@ -249,21 +334,15 @@ function openAuthWindowInner(opts) {
     session.timer = setInterval(() => { poll().catch(() => {}); }, 1500);
     poll().catch(() => {});
 
-    session.loginWin.on('closed', () => {
-      if (!session.completed && !session.cancelled) {
-        session.reject?.(new Error('Login window closed'));
-      }
-      cleanupSession(session);
-      if (win && !win.isDestroyed()) win.close();
-    });
-
     win.on('closed', () => {
       if (activePrompt?.session === session) activePrompt = null;
     });
 
     setTimeout(() => {
       if (session.cancelled || session.completed || activePrompt?.session !== session) return;
-      sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+      if (session.tab === 'browser') {
+        sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+      }
     }, 15000);
   });
 }

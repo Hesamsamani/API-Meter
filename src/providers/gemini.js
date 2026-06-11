@@ -142,6 +142,7 @@ function createGeminiAdapter() {
         cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
         secretKey: 'gemini-session',
         title: 'Login to Gemini',
+        probeUrl: 'https://gemini.google.com/',
       });
     },
     async logout() {
