@@ -39,6 +39,7 @@ function renderWidgetPins(pinned = []) {
 function populateForm(settings) {
   current = settings;
   const fw = settings.floatingWidget || {};
+  document.getElementById('launch-at-startup').checked = settings.launchAtStartup === true;
   document.getElementById('refresh-interval').value = settings.refreshIntervalMinutes ?? 5;
   document.getElementById('auto-refresh').checked = settings.autoRefreshEnabled !== false;
   document.getElementById('alerts-enabled').checked = settings.alerts?.enabled !== false;
@@ -66,6 +67,7 @@ function collectPatch() {
   });
 
   return {
+    launchAtStartup: document.getElementById('launch-at-startup').checked,
     refreshIntervalMinutes: Number(document.getElementById('refresh-interval').value) || 5,
     autoRefreshEnabled: document.getElementById('auto-refresh').checked,
     alerts: {

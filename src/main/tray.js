@@ -124,11 +124,21 @@ function buildContextMenu(handlers) {
     ];
   });
 
+  const launchAtStartup = handlers.getLaunchAtStartup?.() === true;
+
   return Menu.buildFromTemplate([
     { label: 'Show Dashboard', click: handlers.onShowDashboard },
     { label: 'Refresh All', click: handlers.onRefresh },
     { label: 'Toggle Floating Widget', click: handlers.onToggleWidget },
     { type: 'separator' },
+    {
+      label: 'Launch at startup',
+      type: 'checkbox',
+      checked: launchAtStartup,
+      click: (item) => {
+        handlers.onLaunchAtStartupToggle?.(item.checked);
+      },
+    },
     { label: 'Settings', click: handlers.onSettings },
     { type: 'separator' },
     ...providerItems,

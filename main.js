@@ -24,6 +24,7 @@ const {
   prevSize,
   nextTheme,
 } = require('./src/shared/widget-presets');
+const { applyLaunchAtStartup, syncLaunchAtStartup } = require('./src/main/startup');
 
 let store;
 let scheduler;
@@ -68,6 +69,13 @@ function applySettingsPatch(patch) {
   for (const [key, value] of Object.entries(patch)) {
     settings.set(key, value);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'launchAtStartup')) {
+    try {
+      applyLaunchAtStartup(!!patch.launchAtStartup);
+    } catch (err) {
+      console.error('Failed to update launch at startup:', err);
+    }
+  }
   alertManager.warn = settings.get('alerts.warnThreshold');
   alertManager.danger = settings.get('alerts.dangerThreshold');
   scheduler.restart();
@@ -81,6 +89,7 @@ function broadcastSettings() {
       win.webContents.send('settings:updated', payload);
     }
   }
+  trayApi?.rebuildMenu?.();
 }
 
 function seedStore() {
@@ -209,6 +218,8 @@ function getSettingsWin(recreate = false) {
 }
 
 app.whenReady().then(() => {
+  syncLaunchAtStartup(settings);
+
   registry = createRegistry();
   store = new UsageStore();
   alertManager = new AlertManager({
@@ -246,6 +257,10 @@ app.whenReady().then(() => {
       });
     },
     onSettings: () => showSettings(getSettingsWin),
+    getLaunchAtStartup: () => settings.get('launchAtStartup', false),
+    onLaunchAtStartupToggle: (enabled) => {
+      applySettingsPatch({ launchAtStartup: !!enabled });
+    },
     onProviderLogin: async (id) => {
       const adapter = registry.get(id);
       if (!adapter?.login) return;
