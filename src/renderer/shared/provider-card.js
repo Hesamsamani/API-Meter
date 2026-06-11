@@ -63,6 +63,36 @@ function sourceBadge(snapshot) {
   return { text: 'LIVE', cls: 'live' };
 }
 
+function cardShowsEmpty(snapshot) {
+  return !snapshot
+    || (isLoginRequired(snapshot) && !snapshot.windows?.length)
+    || (!snapshot.windows?.length && snapshot.error);
+}
+
+export function snapshotFingerprint(snapshot) {
+  if (!snapshot) return '';
+  return JSON.stringify({
+    source: snapshot.source,
+    plan: snapshot.plan,
+    error: snapshot.error,
+    authRequired: snapshot.authRequired,
+    windows: (snapshot.windows || []).map((w) => ({
+      key: w.key,
+      label: w.label,
+      utilization: w.utilization,
+      resetsAt: w.resetsAt,
+    })),
+  });
+}
+
+function statsHtml(snapshot, variant) {
+  const limit = variant === 'mini' ? 2 : 3;
+  return snapshot.windows.slice(0, limit).map((w) => {
+    const reset = formatCountdown(w.resetsAt);
+    return `<span><strong>${w.label}</strong> ${w.utilization}%${reset ? ` · ${reset}` : ''}</span>`;
+  }).join('');
+}
+
 export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogin } = {}) {
   const meta = PROVIDER_META[snapshot?.providerId] || { label: snapshot?.providerId, accent: 'var(--muted)', initials: '??' };
   const el = document.createElement('article');
@@ -70,11 +100,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   el.style.setProperty('--accent', meta.accent);
   el.dataset.providerId = snapshot?.providerId || '';
 
-  const showEmpty = !snapshot
-    || (isLoginRequired(snapshot) && !snapshot.windows?.length)
-    || (!snapshot.windows?.length && snapshot.error);
-
-  if (showEmpty) {
+  if (cardShowsEmpty(snapshot)) {
     el.innerHTML = buildEmptyCard(meta, snapshot, onLogin);
     if (isLoginRequired(snapshot) && onLogin) {
       el.querySelector('.login-btn')?.addEventListener('click', (e) => {
@@ -103,12 +129,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
       <div class="card-status ${snapshot.source}"></div>
     </div>
     <div class="gauge-wrap"></div>
-    <div class="stats">
-      ${snapshot.windows.slice(0, variant === 'mini' ? 2 : 3).map((w) => {
-        const reset = formatCountdown(w.resetsAt);
-        return `<span><strong>${w.label}</strong> ${w.utilization}%${reset ? ` · ${reset}` : ''}</span>`;
-      }).join('')}
-    </div>
+    <div class="stats">${statsHtml(snapshot, variant)}</div>
     <span class="badge ${badge.cls}">${badge.text}</span>
   `;
 
@@ -139,24 +160,59 @@ function buildEmptyCard(meta, snapshot, onLogin) {
   `;
 }
 
-export function updateProviderCard(el, snapshot, { onLogin } = {}) {
-  const fresh = renderProviderCard(snapshot, { variant: el.classList.contains('provider-card--mini') ? 'mini' : 'full', onLogin });
-  const gaugeWrap = el.querySelector('.gauge-wrap');
-  const newGauge = fresh.querySelector('.gauge-wrap .gauge');
-  if (gaugeWrap && newGauge) {
-    gaugeWrap.replaceChildren(newGauge);
-    const stats = fresh.querySelector('.stats');
-    const badge = fresh.querySelector('.badge');
-    const status = fresh.querySelector('.card-status');
-    const plan = fresh.querySelector('.card-plan');
-    if (stats) el.querySelector('.stats')?.replaceWith(stats);
-    if (badge) el.querySelector('.badge')?.replaceWith(badge);
-    if (status) el.querySelector('.card-status')?.replaceWith(status);
-    if (plan) el.querySelector('.card-plan')?.replaceWith(plan);
-    return el;
-  }
+function replaceProviderCard(el, snapshot, { onClick, variant, onLogin } = {}) {
+  const fresh = renderProviderCard(snapshot, { onClick, variant, onLogin });
+  fresh.classList.add('provider-card--settled');
   el.replaceWith(fresh);
   return fresh;
+}
+
+export function updateProviderCard(el, snapshot, { onClick, onLogin } = {}) {
+  const variant = el.classList.contains('provider-card--mini') ? 'mini' : 'full';
+  const wasEmpty = !!el.querySelector('.card-empty');
+  const nowEmpty = cardShowsEmpty(snapshot);
+
+  if (wasEmpty !== nowEmpty) {
+    return replaceProviderCard(el, snapshot, { onClick, variant, onLogin });
+  }
+
+  if (nowEmpty) {
+    const msg = el.querySelector('.card-empty p');
+    const needsLogin = isLoginRequired(snapshot);
+    if (msg) msg.textContent = needsLogin ? 'Login required' : (snapshot?.error || 'Awaiting data…');
+    const badge = el.querySelector('.badge');
+    if (badge) {
+      badge.textContent = needsLogin ? 'LOGIN' : 'EMPTY';
+      badge.className = 'badge error';
+    }
+    return el;
+  }
+
+  const primary = snapshot.windows[0];
+  const util = worstUtil(snapshot);
+  const badge = sourceBadge(snapshot);
+  const gaugeEl = el.querySelector('.gauge');
+
+  if (gaugeEl) {
+    updateGauge(gaugeEl, primary?.utilization ?? util);
+  }
+
+  const stats = el.querySelector('.stats');
+  if (stats) stats.innerHTML = statsHtml(snapshot, variant);
+
+  const badgeEl = el.querySelector('.badge');
+  if (badgeEl) {
+    badgeEl.textContent = badge.text;
+    badgeEl.className = `badge ${badge.cls}`;
+  }
+
+  const status = el.querySelector('.card-status');
+  if (status) status.className = `card-status ${snapshot.source}`;
+
+  const plan = el.querySelector('.card-plan');
+  if (plan) plan.textContent = snapshot.plan || 'Unknown';
+
+  return el;
 }
 
 function thresholdClass(util) {
@@ -210,6 +266,44 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
   return el;
 }
 
+export function updateSnapshotRow(el, snapshot, { onLogin } = {}) {
+  const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
+  const needsLogin = isLoginRequired(snapshot);
+  const util = worstUtil(snapshot);
+  const badge = sourceBadge(snapshot);
+  const colorClass = hasWindows ? thresholdClass(util) : 'muted';
+
+  const statLine = hasWindows
+    ? snapshot.windows.slice(0, 2).map((w) => {
+        const reset = formatCountdown(w.resetsAt);
+        return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
+      }).join(' · ')
+    : (needsLogin ? 'Login required — click to connect' : (snapshot?.error || 'Awaiting data…'));
+
+  const plan = el.querySelector('.snapshot-plan');
+  const stats = el.querySelector('.snapshot-stats');
+  const pct = el.querySelector('.snapshot-pct');
+  const badgeEl = el.querySelector('.snapshot-badge');
+  const status = el.querySelector('.card-status');
+
+  if (plan) plan.textContent = snapshot?.plan || '—';
+  if (stats) stats.textContent = statLine;
+  if (pct) {
+    pct.textContent = hasWindows ? `${util}%` : '—';
+    pct.className = `snapshot-pct th-${colorClass}`;
+  }
+  if (badgeEl) {
+    badgeEl.textContent = badge.text;
+    badgeEl.className = `snapshot-badge badge ${badge.cls}`;
+  }
+  if (status) status.className = `card-status ${snapshot?.source || 'stale'}`;
+
+  el.classList.toggle('snapshot-row--clickable', needsLogin && !!onLogin);
+  el.title = needsLogin && onLogin ? (snapshot?.error || 'Click to reconnect') : '';
+
+  return el;
+}
+
 export function renderSkeletonCard() {
   const el = document.createElement('div');
   el.className = 'skeleton-card';
@@ -222,4 +316,4 @@ export function renderSkeletonCard() {
   return el;
 }
 
-export { PROVIDER_META, ORDER, worstUtil, formatCountdown, isLoginRequired };
+export { PROVIDER_META, ORDER, worstUtil, formatCountdown, isLoginRequired, cardShowsEmpty };

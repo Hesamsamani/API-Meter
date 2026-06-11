@@ -1,4 +1,9 @@
-import { renderProviderCard, ORDER, worstUtil } from '../shared/provider-card.js';
+import {
+  renderProviderCard,
+  updateProviderCard,
+  snapshotFingerprint,
+  ORDER,
+} from '../shared/provider-card.js';
 
 const body = document.getElementById('widget-body');
 const dots = document.getElementById('widget-dots');
@@ -8,6 +13,9 @@ let settings = { floatingWidget: { pinnedProviders: [], autoRotate: false } };
 let rotateIndex = 0;
 let rotateTimer = null;
 let activeProviders = [];
+let widgetCard = null;
+let widgetProviderId = null;
+const lastFingerprints = new Map();
 
 function getActiveProviders() {
   const pinned = settings.floatingWidget?.pinnedProviders || [];
@@ -31,7 +39,21 @@ function renderWidget() {
 
   const id = activeProviders[rotateIndex];
   const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [] };
-  body.replaceChildren(renderProviderCard(snap, { variant: 'mini' }));
+  const fingerprint = snapshotFingerprint(snap);
+
+  if (widgetCard && widgetProviderId === id && body.contains(widgetCard)
+      && lastFingerprints.get(id) === fingerprint) {
+    /* no-op */
+  } else if (widgetCard && widgetProviderId === id && body.contains(widgetCard)) {
+    updateProviderCard(widgetCard, snap);
+    lastFingerprints.set(id, fingerprint);
+  } else {
+    widgetCard = renderProviderCard(snap, { variant: 'mini' });
+    widgetCard.classList.add('provider-card--settled');
+    widgetProviderId = id;
+    lastFingerprints.set(id, fingerprint);
+    body.replaceChildren(widgetCard);
+  }
 
   if (settings.floatingWidget?.autoRotate && activeProviders.length > 1) {
     dots.replaceChildren(...activeProviders.map((pid, i) => {

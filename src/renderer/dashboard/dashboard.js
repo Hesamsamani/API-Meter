@@ -1,6 +1,8 @@
 import {
   renderProviderCard,
   renderSkeletonCard,
+  updateProviderCard,
+  snapshotFingerprint,
   ORDER,
   PROVIDER_META,
   formatCountdown,
@@ -26,6 +28,8 @@ let chart = null;
 let unsubscribe = null;
 let unsubscribeSettings = null;
 let appSettings = { autoRefreshEnabled: true };
+let gridReady = false;
+const lastFingerprints = new Map();
 
 function showSkeletons() {
   grid.replaceChildren(...ORDER.map(() => renderSkeletonCard()));
@@ -57,25 +61,60 @@ function syncAutoRefreshButton() {
   btnAutoRefresh.title = on ? 'Auto-refresh on' : 'Auto-refresh off';
 }
 
-function renderGrid(data) {
-  snapshots = data || {};
-  grid.replaceChildren();
+function bindLoginButton(card, providerId) {
+  const loginBtn = card.querySelector('.login-btn');
+  if (!loginBtn || loginBtn.dataset.bound) return;
+  loginBtn.dataset.bound = '1';
+  loginBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleLogin(providerId);
+  });
+}
 
-  ORDER.forEach((id, i) => {
-    const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [], fetchedAt: null, error: 'Awaiting data…' };
-    const card = renderProviderCard(snap, {
+function upsertCard(id, snap, { animate = false } = {}) {
+  const fingerprint = snapshotFingerprint(snap);
+  if (lastFingerprints.get(id) === fingerprint) {
+    return grid.querySelector(`[data-provider-id="${id}"]`);
+  }
+  lastFingerprints.set(id, fingerprint);
+
+  let card = grid.querySelector(`[data-provider-id="${id}"]`);
+  if (!card) {
+    card = renderProviderCard(snap, {
       onClick: (s) => openDetail(s.providerId),
       onLogin: () => handleLogin(id),
     });
-    card.style.animationDelay = `${0.05 * (i + 1)}s`;
+    if (!animate) card.classList.add('provider-card--settled');
     grid.appendChild(card);
+    bindLoginButton(card, id);
+    return card;
+  }
 
-    const loginBtn = card.querySelector('.login-btn');
-    if (loginBtn) loginBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleLogin(id);
-    });
+  updateProviderCard(card, snap, {
+    onClick: (s) => openDetail(s.providerId),
+    onLogin: () => handleLogin(id),
   });
+  bindLoginButton(card, id);
+  return card;
+}
+
+function renderGrid(data) {
+  snapshots = data || {};
+
+  if (!gridReady) {
+    grid.replaceChildren();
+    ORDER.forEach((id, i) => {
+      const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [], fetchedAt: null, error: 'Awaiting data…' };
+      const card = upsertCard(id, snap, { animate: true });
+      card.style.animationDelay = `${0.05 * (i + 1)}s`;
+    });
+    gridReady = true;
+  } else {
+    ORDER.forEach((id) => {
+      const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [], fetchedAt: null, error: 'Awaiting data…' };
+      upsertCard(id, snap);
+    });
+  }
 
   updateStatusLine();
   if (selectedId && snapshots[selectedId]) refreshDetail(snapshots[selectedId]);
@@ -101,7 +140,10 @@ function closeDetail() {
   if (chart) { chart.destroy(); chart = null; }
 }
 
+let lastDetailFingerprint = '';
+
 async function refreshDetail(snapshot) {
+  const fp = snapshotFingerprint(snapshot);
   const meta = PROVIDER_META[snapshot.providerId] || { label: snapshot.providerId };
   detailTitle.textContent = meta.label;
 
@@ -110,44 +152,49 @@ async function refreshDetail(snapshot) {
     ? new Date(snapshot.fetchedAt).toLocaleString()
     : '—';
 
-  detailBody.innerHTML = `
-    <div class="detail-meta">
-      Source: <strong>${(snapshot.source || 'unknown').toUpperCase()}</strong><br>
-      Plan: ${snapshot.plan || '—'}<br>
-      Fetched: ${fetched}
-      ${snapshot.error ? `<br><span style="color:var(--red)">${snapshot.error}</span>` : ''}
-    </div>
-    <div id="detail-bars">
-      ${windows.length ? windows.map((w) => `
-        <div class="progress-row">
-          <div class="progress-label">
-            <span>${w.label}</span>
-            <span class="pct th-${thresholdFill(w.utilization)}">${w.utilization}%</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill ${thresholdFill(w.utilization)}" style="width:${w.utilization}%"></div>
-          </div>
-          ${w.resetsAt ? `<div class="reset-time">Resets in ${formatCountdown(w.resetsAt)}</div>` : ''}
-        </div>
-      `).join('') : '<p style="color:var(--muted);font-size:11px">No quota windows available</p>'}
-    </div>
-    <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
-    <div class="detail-actions">
-      ${isLoginRequired(snapshot) || snapshot.error ? `<button type="button" id="detail-login">Re-login</button>` : ''}
-      ${!isLoginRequired(snapshot) && snapshot.windows?.length ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
-      <button type="button" id="detail-refresh">Refresh</button>
-    </div>
-  `;
+  if (lastDetailFingerprint === fp && document.getElementById('detail-bars')) {
+    return;
+  }
+  lastDetailFingerprint = fp;
 
-  document.getElementById('detail-refresh')?.addEventListener('click', () => {
-    window.apiMeter.refreshAll();
-  });
-  document.getElementById('detail-login')?.addEventListener('click', () => {
-    handleLogin(snapshot.providerId);
-  });
-  document.getElementById('detail-disconnect')?.addEventListener('click', () => {
-    handleLogout(snapshot.providerId);
-  });
+  detailBody.innerHTML = `
+      <div class="detail-meta">
+        Source: <strong>${(snapshot.source || 'unknown').toUpperCase()}</strong><br>
+        Plan: ${snapshot.plan || '—'}<br>
+        Fetched: ${fetched}
+        ${snapshot.error ? `<br><span style="color:var(--red)">${snapshot.error}</span>` : ''}
+      </div>
+      <div id="detail-bars">
+        ${windows.length ? windows.map((w) => `
+          <div class="progress-row">
+            <div class="progress-label">
+              <span>${w.label}</span>
+              <span class="pct th-${thresholdFill(w.utilization)}">${w.utilization}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill ${thresholdFill(w.utilization)}" style="width:${w.utilization}%"></div>
+            </div>
+            ${w.resetsAt ? `<div class="reset-time">Resets in ${formatCountdown(w.resetsAt)}</div>` : ''}
+          </div>
+        `).join('') : '<p style="color:var(--muted);font-size:11px">No quota windows available</p>'}
+      </div>
+      <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
+      <div class="detail-actions">
+        ${isLoginRequired(snapshot) || snapshot.error ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+        ${!isLoginRequired(snapshot) && snapshot.windows?.length ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
+        <button type="button" id="detail-refresh">Refresh</button>
+      </div>
+    `;
+
+    document.getElementById('detail-refresh')?.addEventListener('click', () => {
+      window.apiMeter.refreshAll();
+    });
+    document.getElementById('detail-login')?.addEventListener('click', () => {
+      handleLogin(snapshot.providerId);
+    });
+    document.getElementById('detail-disconnect')?.addEventListener('click', () => {
+      handleLogout(snapshot.providerId);
+    });
 
   await renderHistoryChart(snapshot.providerId);
 }

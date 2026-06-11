@@ -27,8 +27,10 @@ let dashboardWin = null;
 let popoverWin = null;
 let floatingWin = null;
 let settingsWin = null;
+let broadcastTimer = null;
 
-function broadcastUsage() {
+function flushUsageBroadcast() {
+  broadcastTimer = null;
   const payload = store.getAll();
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
@@ -37,6 +39,12 @@ function broadcastUsage() {
   }
   trayApi?.update(payload, settings.get('alerts'));
   evaluateAlerts(payload);
+}
+
+/** Coalesce rapid per-provider refreshes into one UI update to prevent flicker. */
+function broadcastUsage() {
+  if (broadcastTimer) clearTimeout(broadcastTimer);
+  broadcastTimer = setTimeout(flushUsageBroadcast, 120);
 }
 
 function evaluateAlerts(snapshots) {

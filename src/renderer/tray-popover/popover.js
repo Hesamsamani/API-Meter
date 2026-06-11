@@ -1,15 +1,51 @@
 import {
   renderSnapshotRow,
+  updateSnapshotRow,
+  snapshotFingerprint,
+  isLoginRequired,
   ORDER,
   worstUtil,
 } from '../shared/provider-card.js';
 
 const container = document.getElementById('popover-cards');
+const lastFingerprints = new Map();
+const loginHandlers = new Map();
 
 function handleLogin(providerId) {
   window.apiMeter?.loginProvider(providerId).catch((err) => {
     console.error('Login failed:', err);
   });
+}
+
+function getLoginHandler(providerId) {
+  if (!loginHandlers.has(providerId)) {
+    loginHandlers.set(providerId, () => handleLogin(providerId));
+  }
+  return loginHandlers.get(providerId);
+}
+
+function upsertRow(snap) {
+  const id = snap.providerId;
+  const fingerprint = snapshotFingerprint(snap);
+  let row = container.querySelector(`[data-provider-id="${id}"]`);
+
+  if (row && lastFingerprints.get(id) === fingerprint) {
+    return row;
+  }
+  lastFingerprints.set(id, fingerprint);
+
+  const onLogin = getLoginHandler(id);
+  if (!row) {
+    row = renderSnapshotRow(snap, { onLogin });
+    return row;
+  }
+
+  updateSnapshotRow(row, snap, { onLogin });
+  if (isLoginRequired(snap) && onLogin && !row.dataset.loginBound) {
+    row.dataset.loginBound = '1';
+    row.addEventListener('click', onLogin);
+  }
+  return row;
 }
 
 function renderPopover(data) {
@@ -19,17 +55,15 @@ function renderPopover(data) {
     .map((id) => snaps[id] || { providerId: id, source: 'stale', windows: [], error: 'Awaiting…' })
     .sort((a, b) => worstUtil(b) - worstUtil(a));
 
-  container.replaceChildren();
+  const fragment = document.createDocumentFragment();
   sorted.forEach((snap) => {
     try {
-      const row = renderSnapshotRow(snap, {
-        onLogin: () => handleLogin(snap.providerId),
-      });
-      container.appendChild(row);
+      fragment.appendChild(upsertRow(snap));
     } catch (err) {
       console.error('Row render failed:', snap.providerId, err);
     }
   });
+  container.replaceChildren(fragment);
 }
 
 async function waitForBridge(maxMs = 5000) {

@@ -176,6 +176,10 @@ body::before {
   animation: cardIn 0.5s ease both;
 }
 
+.provider-card.provider-card--settled {
+  animation: none;
+}
+
 .provider-card::before {
   content: '';
   position: absolute;
