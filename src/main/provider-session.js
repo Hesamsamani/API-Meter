@@ -37,14 +37,38 @@ function cookieUrlsFor(opts) {
     try {
       const origin = new URL(opts.loginUrl).origin;
       urls.add(`${origin}/`);
+      if (origin.includes('claude.ai')) {
+        urls.add(`${origin}/chat`);
+        urls.add(`${origin}/new`);
+      }
     } catch { /* ignore */ }
   }
   if (opts.domain) {
     const host = opts.domain.replace(/^\./, '');
     urls.add(`https://${host}/`);
     urls.add(`https://www.${host}/`);
+    if (host === 'claude.ai') {
+      urls.add(`https://${host}/chat`);
+      urls.add(`https://${host}/new`);
+    }
   }
   return [...urls];
+}
+
+/**
+ * @param {import('electron').Session} ses
+ * @param {string} domain
+ */
+async function findAllDomainCookies(ses, domain) {
+  const host = domain.replace(/^\./, '');
+  const seen = new Map();
+  for (const query of [{ domain: host }, { domain }]) {
+    const cookies = await ses.cookies.get(query);
+    for (const cookie of cookies) {
+      if (cookie.value && !seen.has(cookie.name)) seen.set(cookie.name, cookie);
+    }
+  }
+  return [...seen.values()];
 }
 
 /**
@@ -150,6 +174,7 @@ module.exports = {
   cookieUrlsFor,
   findSessionCookie,
   findSessionCookies,
+  findAllDomainCookies,
   syncElectronCookiesToPartition,
   clearProviderCookies,
 };

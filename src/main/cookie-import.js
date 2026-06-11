@@ -90,6 +90,10 @@ async function verifyImportedSession(opts) {
   if (opts.probeExpectJson === false && typeof body === 'string' && body.length < 8) {
     throw new Error('Empty response — session may be invalid');
   }
+  if (typeof opts.probeValidate === 'function') {
+    const err = opts.probeValidate(body);
+    if (err) throw new Error(err);
+  }
   return true;
 }
 

@@ -5,6 +5,7 @@ const { getPreloadPath } = require('./assets');
 const {
   getProviderSession,
   findSessionCookies,
+  findAllDomainCookies,
   cookieUrlsFor,
   setCookies,
   flushCookies,
@@ -129,25 +130,36 @@ function closeLoginBrowser(session) {
   session.loginWin = null;
 }
 
+function pickPrimaryCookie(hits, names) {
+  for (const name of names) {
+    const hit = hits.find((h) => h?.name === name && h?.value);
+    if (hit) return hit;
+  }
+  return hits.find((h) => h?.value) || hits[0] || null;
+}
+
 async function persistCapturedCookies(opts, hits) {
   const list = Array.isArray(hits) ? hits : [hits];
-  const primary = list.find((h) => h?.value) || list[0];
+  const names = opts.cookieNames || [opts.cookieName].filter(Boolean);
+  const primary = pickPrimaryCookie(list, names);
   if (!primary?.value) return null;
 
   setSecret(opts.secretKey, primary.value);
   if (primary.name) setSecret(`${opts.secretKey}-cookie-name`, primary.name);
 
   const ses = getProviderSession();
-  const names = opts.cookieNames || [opts.cookieName];
   for (const hit of list) {
     if (!hit?.value || !hit.name) continue;
+    const host = (hit.domain || opts.domain || '').replace(/^\./, '') || 'localhost';
+    const scheme = hit.secure !== false ? 'https' : 'http';
     await setCookies(ses, [{
-      url: opts.loginUrl,
+      url: hit.domain ? `${scheme}://${host}${hit.path || '/'}` : (opts.loginUrl || `${scheme}://${host}/`),
       name: hit.name,
       value: hit.value,
       domain: hit.domain || opts.domain,
       path: hit.path || '/',
-      secure: true,
+      secure: hit.secure !== false,
+      httpOnly: hit.httpOnly === true,
       sameSite: 'no_restriction',
     }]);
   }
@@ -164,14 +176,25 @@ async function persistCapturedCookies(opts, hits) {
 async function tryCaptureInAppCookie(opts) {
   const names = opts.cookieNames || [opts.cookieName];
   const ses = getProviderSession();
-  const hits = await findSessionCookies(ses, {
+  const sessionHits = await findSessionCookies(ses, {
     urls: cookieUrlsFor(opts),
     domain: opts.domain,
     names,
   });
-  if (!hits.length) return null;
+  if (!sessionHits.length) return null;
 
-  const primary = hits.find((c) => names.includes(c.name)) || hits[0];
+  const allDomain = opts.domain
+    ? await findAllDomainCookies(ses, opts.domain)
+    : [];
+  const merged = new Map();
+  for (const c of [...allDomain, ...sessionHits]) {
+    if (c?.value && c.name) merged.set(c.name, c);
+  }
+  const hits = [...merged.values()];
+
+  const primary = pickPrimaryCookie(hits, names);
+  if (!primary?.value) return null;
+
   const captured = { ...primary, browser: 'in-app' };
   await persistCapturedCookies(opts, hits);
   return captured;
@@ -220,6 +243,22 @@ async function handleManualToken(session, token, cookieName) {
   const resolvedName = cookieName || defaultName;
   await persistCapturedCookies(session.opts, { value: token, name: resolvedName, browser: 'manual' });
   if (!isSessionActive(session)) return;
+
+  if (session.opts.probeUrl) {
+    sendPrompt('auth-prompt:status', { status: 'Verifying session…', mode: 'waiting' });
+    try {
+      await verifyImportedSession(session.opts);
+    } catch (err) {
+      setSecret(session.opts.secretKey, '');
+      setSecret(`${session.opts.secretKey}-cookie-name`, '');
+      sendPrompt('auth-prompt:status', {
+        status: `Verification failed: ${err.message || err}`,
+        mode: 'error',
+      });
+      return;
+    }
+  }
+
   session.completed = true;
   sendPrompt('auth-prompt:status', { status: 'Session saved manually.', mode: 'ok' });
   session.resolve?.(token);
