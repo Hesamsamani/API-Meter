@@ -25,6 +25,7 @@ const {
   nextTheme,
 } = require('./src/shared/widget-presets');
 const { applyLaunchAtStartup, syncLaunchAtStartup } = require('./src/main/startup');
+const { applyProviderLoginFailure } = require('./src/main/login-error');
 
 let store;
 let scheduler;
@@ -114,6 +115,12 @@ function registerIpc() {
     await scheduler.refreshAll();
     return store.getAll();
   });
+  ipcMain.handle('usage:refreshProvider', async (_e, id) => {
+    const adapter = registry.get(id);
+    if (!adapter) throw new Error(`Unknown provider: ${id}`);
+    await scheduler.refreshProviderAndReschedule(adapter);
+    return store.getAll();
+  });
   ipcMain.handle('provider:login', async (_e, id) => {
     const adapter = registry.get(id);
     if (!adapter?.login) throw new Error(`Provider ${id} has no login flow`);
@@ -123,8 +130,13 @@ function registerIpc() {
       broadcastUsage();
       return store.getAll();
     } catch (err) {
-      const message = err.message || String(err);
-      if (!/cancel/i.test(message) && Notification.isSupported()) {
+      const { applied, message } = applyProviderLoginFailure({
+        providerId: id,
+        error: err,
+        store,
+        onUsageBroadcast: broadcastUsage,
+      });
+      if (applied && Notification.isSupported()) {
         new Notification({ title: 'Login failed', body: message }).show();
       }
       throw err;
@@ -250,7 +262,7 @@ app.whenReady().then(() => {
       floatingWin = toggleFloatingWidget({
         getWin: () => floatingWin,
         createWin: () => {
-          floatingWin = createFloatingWidget();
+          floatingWin = createFloatingWidget(settings.get('floatingWidget'));
           return floatingWin;
         },
         settings,
@@ -269,8 +281,14 @@ app.whenReady().then(() => {
         await scheduler.refreshProviderAndReschedule(adapter);
         broadcastUsage();
       } catch (err) {
-        if (Notification.isSupported()) {
-          new Notification({ title: 'Login failed', body: err.message || String(err) }).show();
+        const { applied, message } = applyProviderLoginFailure({
+          providerId: id,
+          error: err,
+          store,
+          onUsageBroadcast: broadcastUsage,
+        });
+        if (applied && Notification.isSupported()) {
+          new Notification({ title: 'Login failed', body: message }).show();
         }
         throw err;
       }

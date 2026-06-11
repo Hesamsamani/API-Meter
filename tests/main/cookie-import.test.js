@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { looksLikeCookiePaste } from '../../src/main/cookie-import.js';
+import {
+  looksLikeCookiePaste,
+  isGeminiBatchExecuteProbe,
+  buildGeminiProbePostUrl,
+} from '../../src/main/cookie-import.js';
 
 const ETC_EXPORT = JSON.stringify([
   { domain: '.claude.ai', name: 'sessionKey', path: '/', secure: true, value: 'x', httpOnly: true },
@@ -12,4 +16,21 @@ test('looksLikeCookiePaste detects cookie strings', () => {
   assert.equal(looksLikeCookiePaste('[{"name":"x","value":"y"}]'), true);
   assert.equal(looksLikeCookiePaste(ETC_EXPORT), true);
   assert.equal(looksLikeCookiePaste('bare-token-only'), false);
+});
+
+test('isGeminiBatchExecuteProbe matches gemini batchexecute probes only', () => {
+  const probeUrl = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b';
+  assert.equal(isGeminiBatchExecuteProbe({ providerId: 'gemini', probeUrl }), true);
+  assert.equal(isGeminiBatchExecuteProbe({ secretKey: 'gemini-session', probeUrl }), true);
+  assert.equal(isGeminiBatchExecuteProbe({ providerId: 'claude-ai', probeUrl }), false);
+  assert.equal(isGeminiBatchExecuteProbe({ probeUrl: 'https://claude.ai/api/organizations' }), false);
+});
+
+test('buildGeminiProbePostUrl normalizes batchexecute URL for POST', () => {
+  const url = buildGeminiProbePostUrl(
+    'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
+  );
+  assert.match(url, /batchexecute\?rpcids=otAQ7b/);
+  assert.match(url, /rt=c/);
+  assert.match(url, /_reqid=\d+/);
 });

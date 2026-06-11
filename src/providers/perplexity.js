@@ -1,4 +1,5 @@
 const { clampPercent } = require('../shared/normalize');
+const { clearProviderCookies } = require('../main/provider-session');
 
 const LIMITS = {
   remaining_pro: { key: 'pro', label: 'PRO', total: 200 },
@@ -24,7 +25,7 @@ function mapPerplexityRateLimits(body) {
 
 async function ensurePerplexityCookies() {
   const { getSecret } = require('../main/store');
-  const { getProviderSession, setCookies, flushCookies, clearProviderCookies } = require('../main/provider-session');
+  const { getProviderSession, setCookies, flushCookies } = require('../main/provider-session');
   const token = getSecret('perplexity-session');
   if (!token) throw new Error('Perplexity login required');
   const cookieName = getSecret('perplexity-session-cookie-name') || 'pplx.session';

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mapGrokBilling, readGrokAuth } from '../../src/providers/grok.js';
+import { mapGrokBilling, readGrokAuth, formatGrokHttpError } from '../../src/providers/grok.js';
 
 test('mapGrokBilling maps credits utilization', () => {
   const snap = mapGrokBilling(
@@ -15,6 +15,21 @@ test('mapGrokBilling maps credits utilization', () => {
   assert.equal(snap.windows[0].label, 'CRD');
   assert.equal(snap.windows[0].utilization, 25);
   assert.equal(snap.plan, 'SuperGrok');
+});
+
+test('formatGrokHttpError uses JSON message field', () => {
+  const msg = formatGrokHttpError(400, JSON.stringify({ message: 'Timeout expired' }));
+  assert.equal(msg, 'Grok HTTP 400: Timeout expired');
+});
+
+test('formatGrokHttpError truncates non-JSON body to 200 chars', () => {
+  const body = 'x'.repeat(300);
+  const msg = formatGrokHttpError(502, body);
+  assert.equal(msg, `Grok HTTP 502: ${'x'.repeat(200)}`);
+});
+
+test('formatGrokHttpError omits detail when body is empty', () => {
+  assert.equal(formatGrokHttpError(500, ''), 'Grok HTTP 500');
 });
 
 test('readGrokAuth reads nested Grok CLI auth format', () => {

@@ -299,6 +299,7 @@ body::before {
 .card-status.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .card-status.local { background: var(--gemini); box-shadow: 0 0 6px var(--gemini); }
 .card-status.stale { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.card-status.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
 
 .gauge-wrap {
   display: flex;
@@ -363,6 +364,29 @@ body::before {
 }
 
 .card-empty .login-btn:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.card-empty .error-hint {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.card-empty .retry-btn {
+  margin-top: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+
+.card-empty .retry-btn:hover {
   background: rgba(255,255,255,0.05);
 }
 

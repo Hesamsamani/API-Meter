@@ -7,7 +7,9 @@ const {
 } = require('../shared/parse-cookies');
 const { getProviderSession, setCookies, flushCookies } = require('./provider-session');
 const { setSecret } = require('./store');
-const { fetchViaWindow } = require('./fetch-via-window');
+const { fetchViaWindow, postViaWindow } = require('./fetch-via-window');
+
+const GEMINI_ORIGIN = 'https://gemini.google.com/';
 
 function looksLikeCookiePaste(raw) {
   const text = String(raw || '').trim();
@@ -87,11 +89,34 @@ async function importCookiesFromPaste(opts, rawInput) {
   };
 }
 
+function isGeminiBatchExecuteProbe(opts) {
+  const probeUrl = String(opts?.probeUrl || '');
+  if (!probeUrl.includes('batchexecute')) return false;
+  return opts?.providerId === 'gemini' || opts?.secretKey === 'gemini-session';
+}
+
+function buildGeminiProbePostUrl(probeUrl) {
+  const { GEMINI_QUOTA_BATCH_URL } = require('../providers/gemini');
+  const base = String(probeUrl || '').includes('rt=c') ? probeUrl : GEMINI_QUOTA_BATCH_URL;
+  return `${base}&_reqid=${Date.now()}`;
+}
+
 async function verifyImportedSession(opts) {
   if (!opts.probeUrl) return true;
-  const body = await fetchViaWindow(opts.probeUrl, {
-    expectJson: opts.probeExpectJson !== false,
-  });
+  let body;
+  if (isGeminiBatchExecuteProbe(opts)) {
+    const { buildGeminiQuotaReqBody } = require('../providers/gemini');
+    body = await postViaWindow(
+      GEMINI_ORIGIN,
+      buildGeminiProbePostUrl(opts.probeUrl),
+      buildGeminiQuotaReqBody(),
+      { appendGoogleAtToken: true },
+    );
+  } else {
+    body = await fetchViaWindow(opts.probeUrl, {
+      expectJson: opts.probeExpectJson !== false,
+    });
+  }
   if (opts.probeExpectJson === false && typeof body === 'string' && body.length < 8) {
     throw new Error('Empty response — session may be invalid');
   }
@@ -107,4 +132,6 @@ module.exports = {
   importCookiesFromPaste,
   verifyImportedSession,
   formatImportSummary,
+  isGeminiBatchExecuteProbe,
+  buildGeminiProbePostUrl,
 };

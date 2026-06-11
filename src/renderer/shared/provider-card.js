@@ -1,4 +1,6 @@
 import { renderGauge, updateGauge } from './gauge.js';
+import { isAuthErrorMessage } from '../../../shared/auth-errors.js';
+import { thresholdClass } from '../../../shared/alert-thresholds.js';
 
 const PROVIDER_META = {
   'claude-ai': { label: 'Claude', accent: 'var(--claude-ai)', initials: 'CL' },
@@ -41,17 +43,20 @@ function formatCountdown(resetsAt) {
   return `${h}h ${m}m`;
 }
 
-const AUTH_HINTS = [
-  /login/i, /auth/i, /session/i, /credential/i, /cloudflare/i,
-  /unauthorized/i, /\b401\b/, /\b403\b/, /not logged/i, /expired/i,
-  /disconnected/i, /org not found/i, /invalidjson/i,
-];
-
 function isLoginRequired(snapshot) {
   if (!snapshot) return false;
   if (snapshot.authRequired) return true;
-  const msg = snapshot.error || '';
-  return AUTH_HINTS.some((re) => re.test(msg));
+  if (snapshot.source === 'local' && snapshot.windows?.length) return false;
+  return isAuthErrorMessage(snapshot.error || '');
+}
+
+function statusClass(snapshot) {
+  if (isLoginRequired(snapshot)) return 'error';
+  if (snapshot?.error && !snapshot.windows?.length) return 'error';
+  if (snapshot?.error && snapshot.windows?.length) return 'stale';
+  if (snapshot?.source === 'local') return 'local';
+  if (snapshot?.source === 'stale') return 'stale';
+  return 'live';
 }
 
 function sourceBadge(snapshot) {
@@ -67,6 +72,11 @@ function cardShowsEmpty(snapshot) {
   return !snapshot
     || (isLoginRequired(snapshot) && !snapshot.windows?.length)
     || (!snapshot.windows?.length && snapshot.error);
+}
+
+export function getVisibleOrder(settings = {}) {
+  const providers = settings.providers || {};
+  return ORDER.filter((id) => providers[id]?.enabled !== false);
 }
 
 export function snapshotFingerprint(snapshot) {
@@ -93,7 +103,29 @@ function statsHtml(snapshot, variant) {
   }).join('');
 }
 
-export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogin } = {}) {
+function bindEmptyCardActions(el, snapshot, { onLogin, onRetry } = {}) {
+  const needsLogin = isLoginRequired(snapshot);
+  const hasError = snapshot?.error && !needsLogin;
+
+  const loginBtn = el.querySelector('.login-btn');
+  if (needsLogin && onLogin && loginBtn && !loginBtn.dataset.bound) {
+    loginBtn.dataset.bound = '1';
+    loginBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onLogin();
+    });
+  }
+  const retryBtn = el.querySelector('.retry-btn');
+  if (hasError && onRetry && retryBtn && !retryBtn.dataset.bound) {
+    retryBtn.dataset.bound = '1';
+    retryBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onRetry();
+    });
+  }
+}
+
+export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogin, onRetry } = {}) {
   const meta = PROVIDER_META[snapshot?.providerId] || { label: snapshot?.providerId, accent: 'var(--muted)', initials: '??' };
   const el = document.createElement('article');
   el.className = `provider-card provider-card--${variant}`;
@@ -101,13 +133,8 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   el.dataset.providerId = snapshot?.providerId || '';
 
   if (cardShowsEmpty(snapshot)) {
-    el.innerHTML = buildEmptyCard(meta, snapshot, onLogin);
-    if (isLoginRequired(snapshot) && onLogin) {
-      el.querySelector('.login-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onLogin();
-      });
-    }
+    el.innerHTML = buildEmptyCard(meta, snapshot, { onLogin, onRetry });
+    bindEmptyCardActions(el, snapshot, { onLogin, onRetry });
     return el;
   }
 
@@ -126,7 +153,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
         <span class="card-title">${meta.label}</span>
         <span class="card-plan">${planLabel}</span>
       </div>
-      <div class="card-status ${snapshot.source}"></div>
+      <div class="card-status ${statusClass(snapshot)}"></div>
     </div>
     <div class="gauge-wrap"></div>
     <div class="stats">${statsHtml(snapshot, variant)}</div>
@@ -141,8 +168,25 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   return el;
 }
 
-function buildEmptyCard(meta, snapshot, onLogin) {
+function buildEmptyCard(meta, snapshot, { onLogin, onRetry } = {}) {
   const needsLogin = isLoginRequired(snapshot);
+  const hasError = snapshot?.error && !needsLogin;
+  let emptyContent = '<p>Awaiting data…</p>';
+
+  if (needsLogin) {
+    const primary = snapshot?.error || 'Login required';
+    emptyContent = `
+      <p>${primary}</p>
+      <p class="error-hint">Connect to sign in</p>
+      ${onLogin ? '<button class="login-btn" type="button">Connect</button>' : ''}
+    `;
+  } else if (hasError) {
+    emptyContent = `
+      <p>${snapshot.error}</p>
+      ${onRetry ? '<button class="retry-btn" type="button">Retry</button>' : ''}
+    `;
+  }
+
   return `
     <div class="card-header">
       ${providerLogoHtml(meta, snapshot?.providerId)}
@@ -150,39 +194,69 @@ function buildEmptyCard(meta, snapshot, onLogin) {
         <span class="card-title">${meta.label}</span>
         <span class="card-plan">${snapshot?.plan || '—'}</span>
       </div>
-      <div class="card-status stale"></div>
+      <div class="card-status ${statusClass(snapshot)}"></div>
     </div>
     <div class="card-empty">
-      <p>${needsLogin ? 'Login required' : snapshot?.error || 'Awaiting data…'}</p>
-      ${needsLogin && onLogin ? '<button class="login-btn" type="button">Connect</button>' : ''}
+      ${emptyContent}
     </div>
-    <span class="badge error">${needsLogin ? 'LOGIN' : 'EMPTY'}</span>
+    <span class="badge error">${needsLogin ? 'LOGIN' : hasError ? 'ERROR' : 'EMPTY'}</span>
   `;
 }
 
-function replaceProviderCard(el, snapshot, { onClick, variant, onLogin } = {}) {
-  const fresh = renderProviderCard(snapshot, { onClick, variant, onLogin });
+function replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry } = {}) {
+  const fresh = renderProviderCard(snapshot, { onClick, variant, onLogin, onRetry });
   fresh.classList.add('provider-card--settled');
   el.replaceWith(fresh);
   return fresh;
 }
 
-export function updateProviderCard(el, snapshot, { onClick, onLogin } = {}) {
+export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry } = {}) {
   const variant = el.classList.contains('provider-card--mini') ? 'mini' : 'full';
   const wasEmpty = !!el.querySelector('.card-empty');
   const nowEmpty = cardShowsEmpty(snapshot);
 
   if (wasEmpty !== nowEmpty) {
-    return replaceProviderCard(el, snapshot, { onClick, variant, onLogin });
+    return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry });
   }
 
   if (nowEmpty) {
-    const msg = el.querySelector('.card-empty p');
     const needsLogin = isLoginRequired(snapshot);
-    if (msg) msg.textContent = needsLogin ? 'Login required' : (snapshot?.error || 'Awaiting data…');
+    const hasError = snapshot?.error && !needsLogin;
+    const wantsLoginBtn = needsLogin && !!onLogin;
+    const wantsRetryBtn = hasError && !!onRetry;
+    const hadLoginBtn = !!el.querySelector('.login-btn');
+    const hadRetryBtn = !!el.querySelector('.retry-btn');
+
+    const status = el.querySelector('.card-status');
+    if (status) status.className = `card-status ${statusClass(snapshot)}`;
+
+    if (hadLoginBtn !== wantsLoginBtn || hadRetryBtn !== wantsRetryBtn) {
+      return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry });
+    }
+
+    const empty = el.querySelector('.card-empty');
+    if (empty) {
+      if (needsLogin) {
+        const primary = snapshot?.error || 'Login required';
+        empty.innerHTML = `
+          <p>${primary}</p>
+          <p class="error-hint">Connect to sign in</p>
+          ${wantsLoginBtn ? '<button class="login-btn" type="button">Connect</button>' : ''}
+        `;
+      } else if (hasError) {
+        empty.innerHTML = `
+          <p>${snapshot.error}</p>
+          ${wantsRetryBtn ? '<button class="retry-btn" type="button">Retry</button>' : ''}
+        `;
+      } else {
+        empty.innerHTML = '<p>Awaiting data…</p>';
+      }
+      bindEmptyCardActions(el, snapshot, { onLogin, onRetry });
+    }
+
     const badge = el.querySelector('.badge');
     if (badge) {
-      badge.textContent = needsLogin ? 'LOGIN' : 'EMPTY';
+      badge.textContent = needsLogin ? 'LOGIN' : hasError ? 'ERROR' : 'EMPTY';
       badge.className = 'badge error';
     }
     return el;
@@ -207,7 +281,7 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin } = {}) {
   }
 
   const status = el.querySelector('.card-status');
-  if (status) status.className = `card-status ${snapshot.source}`;
+  if (status) status.className = `card-status ${statusClass(snapshot)}`;
 
   const plan = el.querySelector('.card-plan');
   if (plan) plan.textContent = snapshot.plan || 'Unknown';
@@ -215,14 +289,8 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin } = {}) {
   return el;
 }
 
-function thresholdClass(util) {
-  if (util >= 90) return 'red';
-  if (util >= 75) return 'amber';
-  return 'green';
-}
-
 /** Compact horizontal row for tray popover — shows usage % and window stats */
-export function renderSnapshotRow(snapshot, { onLogin } = {}) {
+export function renderSnapshotRow(snapshot, { onLogin, onRetry } = {}) {
   const meta = PROVIDER_META[snapshot?.providerId] || { label: snapshot?.providerId, accent: 'var(--muted)', initials: '??' };
   const el = document.createElement('article');
   el.className = 'snapshot-row';
@@ -231,6 +299,7 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
 
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
+  const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
   const util = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const colorClass = hasWindows ? thresholdClass(util) : 'muted';
@@ -240,7 +309,9 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
         const reset = formatCountdown(w.resetsAt);
         return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
       }).join(' · ')
-    : (needsLogin ? 'Login required — click to connect' : (snapshot?.error || 'Awaiting data…'));
+    : (needsLogin
+      ? (snapshot?.error || 'Login required — click to connect')
+      : (snapshot?.error || 'Awaiting data…'));
 
   el.innerHTML = `
     <div class="snapshot-accent"></div>
@@ -254,21 +325,26 @@ export function renderSnapshotRow(snapshot, { onLogin } = {}) {
       <span class="snapshot-pct th-${colorClass}">${hasWindows ? `${util}%` : '—'}</span>
       <span class="snapshot-badge badge ${badge.cls}">${badge.text}</span>
     </div>
-    <div class="card-status ${snapshot?.source || 'stale'}"></div>
+    <div class="card-status ${statusClass(snapshot)}"></div>
   `;
 
   if (needsLogin && onLogin) {
     el.classList.add('snapshot-row--clickable');
     el.title = snapshot?.error || 'Click to reconnect';
     el.addEventListener('click', onLogin);
+  } else if (hasRetryableError && onRetry) {
+    el.classList.add('snapshot-row--clickable');
+    el.title = snapshot?.error || 'Click to retry';
+    el.addEventListener('click', onRetry);
   }
 
   return el;
 }
 
-export function updateSnapshotRow(el, snapshot, { onLogin } = {}) {
+export function updateSnapshotRow(el, snapshot, { onLogin, onRetry } = {}) {
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
+  const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
   const util = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const colorClass = hasWindows ? thresholdClass(util) : 'muted';
@@ -278,7 +354,9 @@ export function updateSnapshotRow(el, snapshot, { onLogin } = {}) {
         const reset = formatCountdown(w.resetsAt);
         return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
       }).join(' · ')
-    : (needsLogin ? 'Login required — click to connect' : (snapshot?.error || 'Awaiting data…'));
+    : (needsLogin
+      ? (snapshot?.error || 'Login required — click to connect')
+      : (snapshot?.error || 'Awaiting data…'));
 
   const plan = el.querySelector('.snapshot-plan');
   const stats = el.querySelector('.snapshot-stats');
@@ -296,10 +374,17 @@ export function updateSnapshotRow(el, snapshot, { onLogin } = {}) {
     badgeEl.textContent = badge.text;
     badgeEl.className = `snapshot-badge badge ${badge.cls}`;
   }
-  if (status) status.className = `card-status ${snapshot?.source || 'stale'}`;
+  if (status) status.className = `card-status ${statusClass(snapshot)}`;
 
-  el.classList.toggle('snapshot-row--clickable', needsLogin && !!onLogin);
-  el.title = needsLogin && onLogin ? (snapshot?.error || 'Click to reconnect') : '';
+  const clickable = (needsLogin && onLogin) || (hasRetryableError && onRetry);
+  el.classList.toggle('snapshot-row--clickable', clickable);
+  if (clickable) {
+    el.title = needsLogin ? (snapshot?.error || 'Click to reconnect') : (snapshot?.error || 'Click to retry');
+    el.onclick = needsLogin ? onLogin : onRetry;
+  } else {
+    el.title = '';
+    el.onclick = null;
+  }
 
   return el;
 }
@@ -316,4 +401,4 @@ export function renderSkeletonCard() {
   return el;
 }
 
-export { PROVIDER_META, ORDER, worstUtil, formatCountdown, isLoginRequired, cardShowsEmpty };
+export { PROVIDER_META, ORDER, worstUtil, formatCountdown, isLoginRequired, cardShowsEmpty, statusClass };

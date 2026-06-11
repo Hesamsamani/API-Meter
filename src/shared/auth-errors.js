@@ -12,9 +12,6 @@ const AUTH_ERROR_PATTERNS = [
   /disconnected/i,
   /setting cookie/i,
   /org not found/i,
-  /invalidjson/i,
-  /rate limit/i,
-  /\b429\b/,
 ];
 
 function isAuthErrorMessage(message) {

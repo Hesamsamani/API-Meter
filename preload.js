@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   getUsage: () => ipcRenderer.invoke('usage:getAll'),
   getHistory: (providerId) => ipcRenderer.invoke('usage:getHistory', providerId),
   refreshAll: () => ipcRenderer.invoke('usage:refreshAll'),
+  refreshProvider: (id) => ipcRenderer.invoke('usage:refreshProvider', id),
   loginProvider: (id) => ipcRenderer.invoke('provider:login', id),
   logoutProvider: (id) => ipcRenderer.invoke('provider:logout', id),
   getSettings: () => ipcRenderer.invoke('settings:get'),

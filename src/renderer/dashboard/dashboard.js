@@ -3,12 +3,13 @@ import {
   renderSkeletonCard,
   updateProviderCard,
   snapshotFingerprint,
-  ORDER,
+  getVisibleOrder,
   PROVIDER_META,
   formatCountdown,
   isLoginRequired,
   worstUtil,
 } from '../shared/provider-card.js';
+import { setAlertThresholds, thresholdClass } from '../../../shared/alert-thresholds.js';
 
 const grid = document.getElementById('provider-grid');
 const detailPanel = document.getElementById('detail-panel');
@@ -31,14 +32,12 @@ let appSettings = { autoRefreshEnabled: true };
 let gridReady = false;
 const lastFingerprints = new Map();
 
-function showSkeletons() {
-  grid.replaceChildren(...ORDER.map(() => renderSkeletonCard()));
+function visibleOrder() {
+  return getVisibleOrder(appSettings);
 }
 
-function thresholdFill(util) {
-  if (util >= 90) return 'red';
-  if (util >= 75) return 'amber';
-  return 'green';
+function showSkeletons() {
+  grid.replaceChildren(...visibleOrder().map(() => renderSkeletonCard()));
 }
 
 function handleLogin(providerId) {
@@ -50,6 +49,12 @@ function handleLogin(providerId) {
 function handleLogout(providerId) {
   window.apiMeter.logoutProvider(providerId).catch((err) => {
     console.error('Disconnect failed:', err);
+  });
+}
+
+function handleRetry(providerId) {
+  window.apiMeter.refreshProvider(providerId).catch((err) => {
+    console.error('Refresh failed:', err);
   });
 }
 
@@ -71,6 +76,16 @@ function bindLoginButton(card, providerId) {
   });
 }
 
+function bindRetryButton(card, providerId) {
+  const retryBtn = card.querySelector('.retry-btn');
+  if (!retryBtn || retryBtn.dataset.bound) return;
+  retryBtn.dataset.bound = '1';
+  retryBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleRetry(providerId);
+  });
+}
+
 function upsertCard(id, snap, { animate = false } = {}) {
   const fingerprint = snapshotFingerprint(snap);
   if (lastFingerprints.get(id) === fingerprint) {
@@ -83,34 +98,43 @@ function upsertCard(id, snap, { animate = false } = {}) {
     card = renderProviderCard(snap, {
       onClick: (s) => openDetail(s.providerId),
       onLogin: () => handleLogin(id),
+      onRetry: () => handleRetry(id),
     });
     if (!animate) card.classList.add('provider-card--settled');
     grid.appendChild(card);
     bindLoginButton(card, id);
+    bindRetryButton(card, id);
     return card;
   }
 
   updateProviderCard(card, snap, {
     onClick: (s) => openDetail(s.providerId),
     onLogin: () => handleLogin(id),
+    onRetry: () => handleRetry(id),
   });
   bindLoginButton(card, id);
+  bindRetryButton(card, id);
   return card;
 }
 
 function renderGrid(data) {
   snapshots = data || {};
+  const order = visibleOrder();
 
   if (!gridReady) {
     grid.replaceChildren();
-    ORDER.forEach((id, i) => {
+    order.forEach((id, i) => {
       const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [], fetchedAt: null, error: 'Awaiting data…' };
       const card = upsertCard(id, snap, { animate: true });
       card.style.animationDelay = `${0.05 * (i + 1)}s`;
     });
     gridReady = true;
   } else {
-    ORDER.forEach((id) => {
+    const visibleIds = new Set(order);
+    grid.querySelectorAll('[data-provider-id]').forEach((card) => {
+      if (!visibleIds.has(card.dataset.providerId)) card.remove();
+    });
+    order.forEach((id) => {
       const snap = snapshots[id] || { providerId: id, source: 'stale', windows: [], fetchedAt: null, error: 'Awaiting data…' };
       upsertCard(id, snap);
     });
@@ -121,7 +145,7 @@ function renderGrid(data) {
 }
 
 function updateStatusLine() {
-  const snaps = Object.values(snapshots);
+  const snaps = visibleOrder().map((id) => snapshots[id]).filter(Boolean);
   const live = snaps.filter((s) => s.source === 'live').length;
   const stale = snaps.filter((s) => s.source === 'stale').length;
   const worst = snaps.reduce((max, s) => Math.max(max, worstUtil(s)), 0);
@@ -169,10 +193,10 @@ async function refreshDetail(snapshot) {
           <div class="progress-row">
             <div class="progress-label">
               <span>${w.label}</span>
-              <span class="pct th-${thresholdFill(w.utilization)}">${w.utilization}%</span>
+              <span class="pct th-${thresholdClass(w.utilization)}">${w.utilization}%</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill ${thresholdFill(w.utilization)}" style="width:${w.utilization}%"></div>
+              <div class="progress-fill ${thresholdClass(w.utilization)}" style="width:${w.utilization}%"></div>
             </div>
             ${w.resetsAt ? `<div class="reset-time">Resets in ${formatCountdown(w.resetsAt)}</div>` : ''}
           </div>
@@ -180,14 +204,15 @@ async function refreshDetail(snapshot) {
       </div>
       <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
       <div class="detail-actions">
-        ${isLoginRequired(snapshot) || snapshot.error ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+        ${isLoginRequired(snapshot) ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+        ${snapshot.error && !isLoginRequired(snapshot) ? `<button type="button" id="detail-retry">Retry</button>` : ''}
         ${!isLoginRequired(snapshot) && snapshot.windows?.length ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
         <button type="button" id="detail-refresh">Refresh</button>
       </div>
     `;
 
     document.getElementById('detail-refresh')?.addEventListener('click', () => {
-      window.apiMeter.refreshAll();
+      window.apiMeter.refreshProvider(snapshot.providerId);
     });
     document.getElementById('detail-login')?.addEventListener('click', () => {
       handleLogin(snapshot.providerId);
@@ -254,6 +279,18 @@ async function renderHistoryChart(providerId) {
   });
 }
 
+function applySettings(settings) {
+  const prevOrder = visibleOrder().join(',');
+  appSettings = settings || appSettings;
+  setAlertThresholds(appSettings.alerts);
+  syncAutoRefreshButton();
+  if (prevOrder !== visibleOrder().join(',')) {
+    gridReady = false;
+    lastFingerprints.clear();
+  }
+  if (Object.keys(snapshots).length) renderGrid(snapshots);
+}
+
 async function init() {
   showSkeletons();
   btnMinimize?.addEventListener('click', () => window.apiMeter.minimizeWindow());
@@ -274,6 +311,7 @@ async function init() {
 
   try {
     appSettings = await window.apiMeter.getSettings();
+    setAlertThresholds(appSettings.alerts);
     syncAutoRefreshButton();
     const data = await window.apiMeter.getUsage();
     renderGrid(data);
@@ -282,10 +320,7 @@ async function init() {
   }
 
   unsubscribe = window.apiMeter.onUsageUpdated((data) => renderGrid(data));
-  unsubscribeSettings = window.apiMeter.onSettingsUpdated((data) => {
-    appSettings = data;
-    syncAutoRefreshButton();
-  });
+  unsubscribeSettings = window.apiMeter.onSettingsUpdated((data) => applySettings(data));
 }
 
 init();

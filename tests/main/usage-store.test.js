@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UsageStore } from '../../src/main/usage-store.js';
+import { isAuthErrorMessage } from '../../src/shared/auth-errors.js';
 
 const live = {
   providerId: 'claude-code',
@@ -31,6 +32,7 @@ test('setSnapshot preserves local source and error from adapter fallback', () =>
   const snap = store.get('gemini');
   assert.equal(snap.source, 'local');
   assert.equal(snap.error, fallback.error);
+  assert.equal(snap.authRequired, undefined);
 });
 
 test('setError keeps last good snapshot as stale', () => {
@@ -48,6 +50,19 @@ test('setError clears windows on auth failures', () => {
   store.setError('claude-ai', 'Claude.ai login required');
   const snap = store.get('claude-ai');
   assert.equal(snap.authRequired, true);
+  assert.deepEqual(snap.windows, []);
+});
+
+test('setError sets authRequired for Setting cookie failed', () => {
+  const message = 'Setting cookie failed (sessionKey): net::ERR_FAILED';
+  assert.equal(isAuthErrorMessage(message), true);
+
+  const store = new UsageStore();
+  store.setSnapshot('claude-ai', live);
+  store.setError('claude-ai', message);
+  const snap = store.get('claude-ai');
+  assert.equal(snap.authRequired, true);
+  assert.equal(snap.error, message);
   assert.deepEqual(snap.windows, []);
 });
 

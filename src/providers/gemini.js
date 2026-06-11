@@ -2,11 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const { geminiTmpPath } = require('../shared/paths');
 const { clampPercent } = require('../shared/normalize');
-const { fetchViaWindow } = require('../main/fetch-via-window');
+const { postViaWindow } = require('../main/fetch-via-window');
 const { openAuthWindow } = require('../main/auth-window');
 const { getSecret } = require('../main/store');
 
 const AI_PRO_DAILY_LIMIT = 1000;
+const GEMINI_ORIGIN = 'https://gemini.google.com/';
+const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b&rt=c';
+
+function buildGeminiQuotaReqBody() {
+  const fReq = JSON.stringify([[['otAQ7b', '[]', null, 'generic']]]);
+  return `f.req=${encodeURIComponent(fReq)}`;
+}
 
 function countTodaySessions() {
   const base = geminiTmpPath();
@@ -102,9 +109,11 @@ async function fetchLiveGemini() {
     cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
   });
   await flushCookies(ses);
-  const raw = await fetchViaWindow(
-    'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
-    { expectJson: false },
+  const raw = await postViaWindow(
+    GEMINI_ORIGIN,
+    `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`,
+    buildGeminiQuotaReqBody(),
+    { appendGoogleAtToken: true },
   );
   const inner = parseGeminiBatchExecute(raw);
   const quota = extractGeminiQuota(inner);
@@ -137,6 +146,7 @@ function createGeminiAdapter() {
       const { setProviderDisconnected } = require('../main/store');
       setProviderDisconnected('gemini', false);
       await openAuthWindow({
+        providerId: 'gemini',
         loginUrl: 'https://gemini.google.com/',
         domain: '.google.com',
         cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
@@ -173,4 +183,11 @@ function createGeminiAdapter() {
   };
 }
 
-module.exports = { createGeminiAdapter, parseGeminiBatchExecute, extractGeminiQuota, mapLocalGemini };
+module.exports = {
+  createGeminiAdapter,
+  parseGeminiBatchExecute,
+  extractGeminiQuota,
+  mapLocalGemini,
+  buildGeminiQuotaReqBody,
+  GEMINI_QUOTA_BATCH_URL,
+};

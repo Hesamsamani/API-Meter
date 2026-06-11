@@ -24,6 +24,25 @@ function isGrokTokenExpired(auth) {
   return Date.now() >= ms;
 }
 
+function formatGrokHttpError(statusCode, raw = '') {
+  let detail = '';
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.message) {
+        detail = String(parsed.message);
+      } else {
+        detail = raw.slice(0, 200);
+      }
+    } catch {
+      detail = raw.slice(0, 200);
+    }
+  }
+  return detail
+    ? `Grok HTTP ${statusCode}: ${detail}`
+    : `Grok HTTP ${statusCode}`;
+}
+
 function grokGet(path, token) {
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -43,7 +62,9 @@ function grokGet(path, token) {
         if (res.statusCode === 401) {
           return reject(new Error('Grok session expired — run `grok login` in terminal'));
         }
-        if (res.statusCode !== 200) return reject(new Error(`Grok HTTP ${res.statusCode}`));
+        if (res.statusCode !== 200) {
+          return reject(new Error(formatGrokHttpError(res.statusCode, raw)));
+        }
         try {
           resolve(JSON.parse(raw));
         } catch {
@@ -122,4 +143,10 @@ function createGrokAdapter() {
   };
 }
 
-module.exports = { createGrokAdapter, mapGrokBilling, readGrokAuth, isGrokTokenExpired };
+module.exports = {
+  createGrokAdapter,
+  mapGrokBilling,
+  readGrokAuth,
+  isGrokTokenExpired,
+  formatGrokHttpError,
+};

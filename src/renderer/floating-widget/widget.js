@@ -4,8 +4,10 @@ import {
   snapshotFingerprint,
   PROVIDER_META,
   worstUtil,
-  ORDER,
+  getVisibleOrder,
 } from '../shared/provider-card.js';
+import { setAlertThresholds, thresholdClass } from '../../../shared/alert-thresholds.js';
+
 const root = document.getElementById('widget-root');
 const body = document.getElementById('widget-body');
 const dots = document.getElementById('widget-dots');
@@ -36,12 +38,19 @@ function widgetConfig() {
   };
 }
 
+function handleRetry(providerId) {
+  window.apiMeter.refreshProvider(providerId).catch((err) => {
+    console.error('Refresh failed:', err);
+  });
+}
+
 function getActiveProviders() {
   const cfg = widgetConfig();
+  const visible = getVisibleOrder(settings);
   if (cfg.pinnedProviders.length) {
-    return cfg.pinnedProviders.filter((id) => ORDER.includes(id));
+    return cfg.pinnedProviders.filter((id) => visible.includes(id));
   }
-  return ORDER.filter((id) => {
+  return visible.filter((id) => {
     const snap = snapshots[id];
     return snap?.windows?.length || snap?.error;
   });
@@ -54,12 +63,6 @@ function applyChrome() {
   root.dataset.mode = cfg.displayMode;
   root.style.setProperty('--widget-opacity', String(cfg.opacity));
   footer.hidden = cfg.displayMode !== 'single' || activeProviders.length <= 1;
-}
-
-function thresholdClass(util) {
-  if (util >= 90) return 'red';
-  if (util >= 75) return 'amber';
-  return 'green';
 }
 
 function renderCompactRow(snap) {
@@ -105,11 +108,11 @@ function upsertMiniCard(container, snap) {
   lastFingerprints.set(id, fp);
 
   if (card) {
-    updateProviderCard(card, snap);
+    updateProviderCard(card, snap, { onRetry: () => handleRetry(id) });
     return card;
   }
 
-  card = renderProviderCard(snap, { variant: 'mini' });
+  card = renderProviderCard(snap, { variant: 'mini', onRetry: () => handleRetry(id) });
   card.classList.add('provider-card--settled', 'provider-card--widget');
   container.appendChild(card);
   return card;
@@ -133,11 +136,11 @@ function renderSingleMode() {
   if (card && lastFingerprints.get(id) === fp) {
     /* unchanged */
   } else if (card) {
-    updateProviderCard(card, snap);
+    updateProviderCard(card, snap, { onRetry: () => handleRetry(id) });
     lastFingerprints.set(id, fp);
   } else {
     body.replaceChildren();
-    card = renderProviderCard(snap, { variant: 'mini' });
+    card = renderProviderCard(snap, { variant: 'mini', onRetry: () => handleRetry(id) });
     card.classList.add('provider-card--settled', 'provider-card--widget');
     lastFingerprints.set(id, fp);
     body.appendChild(card);
@@ -170,7 +173,7 @@ function renderGridMode() {
       return;
     }
     if (existing) {
-      updateProviderCard(existing, snap);
+      updateProviderCard(existing, snap, { onRetry: () => handleRetry(id) });
       lastFingerprints.set(id, fp);
       existing.classList.add('provider-card--settled', 'provider-card--widget');
       grid.appendChild(existing);
@@ -248,6 +251,7 @@ function onUsageUpdate(data) {
 
 function onSettingsUpdate(data) {
   settings = data || settings;
+  setAlertThresholds(settings.alerts);
   renderWidget();
   startRotate();
 }
@@ -280,6 +284,7 @@ async function init() {
 
   try {
     settings = await window.apiMeter.getSettings();
+    setAlertThresholds(settings.alerts);
     snapshots = await window.apiMeter.getUsage();
   } catch { /* ignore */ }
 

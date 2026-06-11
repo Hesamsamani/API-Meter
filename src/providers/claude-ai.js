@@ -75,7 +75,7 @@ async function ensureClaudeSession(storedValue) {
   const existing = await findSessionCookies(ses, {
     urls: cookieUrlsFor(sessionOpts),
     domain: CLAUDE_DOMAIN,
-    names: ['sessionKey'],
+    names: CLAUDE_COOKIE_NAMES,
   });
 
   if (!existing.length && storedValue) {

@@ -1,10 +1,4 @@
-const THRESHOLD = { warn: 75, danger: 90 };
-
-function thresholdClass(utilization) {
-  if (utilization >= THRESHOLD.danger) return 'red';
-  if (utilization >= THRESHOLD.warn) return 'amber';
-  return 'green';
-}
+import { thresholdClass } from '../../../shared/alert-thresholds.js';
 
 export function renderGauge(utilization = 0, { size = 88, stroke = 6, variant = 'full' } = {}) {
   const clamped = Math.max(0, Math.min(100, utilization));

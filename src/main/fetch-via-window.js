@@ -107,6 +107,84 @@ function fetchViaWindow(url, { timeoutMs = 30000, expectJson = true, partition =
   });
 }
 
+/**
+ * Load originUrl in a hidden window, then POST from page context (cookies included).
+ * @param {string} originUrl
+ * @param {string} postUrl
+ * @param {string} body - application/x-www-form-urlencoded body
+ * @param {{ timeoutMs?: number, partition?: string, appendGoogleAtToken?: boolean }} [options]
+ */
+function postViaWindow(
+  originUrl,
+  postUrl,
+  body,
+  { timeoutMs = 30000, partition = PARTITION, appendGoogleAtToken = false } = {},
+) {
+  return new Promise((resolve, reject) => {
+    const win = createFetchWindow({ partition });
+    let settled = false;
+    let posted = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (!win.isDestroyed()) win.close();
+      fn(value);
+    };
+
+    const timeout = setTimeout(() => finish(reject, new Error('Request timeout')), timeoutMs);
+
+    const runPost = async () => {
+      if (posted || win.isDestroyed() || win.webContents.isLoading()) return;
+      const currentUrl = win.webContents.getURL();
+      if (!urlLooksReady(currentUrl, originUrl)) return;
+
+      posted = true;
+      try {
+        const responseText = await win.webContents.executeJavaScript(
+          `(async () => {
+            let postBody = ${JSON.stringify(body)};
+            if (${appendGoogleAtToken}) {
+              const html = document.documentElement.innerHTML;
+              const match = html.match(/SNlM0e\\\\":\\\\"(.*?)\\\\"/);
+              if (match && !postBody.includes('at=')) {
+                postBody += '&at=' + encodeURIComponent(match[1]);
+              }
+            }
+            const resp = await fetch(${JSON.stringify(postUrl)}, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+              body: postBody,
+            });
+            const text = await resp.text();
+            if (!resp.ok) {
+              throw new Error('HTTP ' + resp.status + ': ' + text.substring(0, 200));
+            }
+            return text;
+          })()`,
+        );
+        if (!String(responseText || '').trim()) {
+          finish(reject, new Error('Empty response'));
+          return;
+        }
+        finish(resolve, String(responseText));
+      } catch (err) {
+        finish(reject, err);
+      }
+    };
+
+    win.webContents.on('did-stop-loading', () => { runPost().catch((err) => finish(reject, err)); });
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || BENIGN_FAIL_CODES.has(errorCode)) return;
+      finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
+    });
+
+    win.loadURL(originUrl);
+  });
+}
+
 function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, partition = PARTITION } = {}) {
   return new Promise((resolve, reject) => {
     const win = createFetchWindow({ partition });
@@ -172,6 +250,7 @@ function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, pa
 
 module.exports = {
   fetchViaWindow,
+  postViaWindow,
   fetchMultipleViaWindow,
   parseResponseBody,
   createFetchWindow,
