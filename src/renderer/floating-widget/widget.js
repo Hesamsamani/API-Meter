@@ -7,12 +7,21 @@ import {
   getVisibleOrder,
   isLoginRequired,
 } from '../shared/provider-card.js';
+import {
+  renderOrbCluster,
+  updateOrbCluster,
+  countOrbSlots,
+  orbFingerprint,
+} from '../shared/widget-orb.js';
 import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
 
 const root = document.getElementById('widget-root');
 const body = document.getElementById('widget-body');
 const dots = document.getElementById('widget-dots');
 const footer = document.getElementById('widget-footer');
+const clickBadge = document.getElementById('widget-click-badge');
+const ctxMenu = document.getElementById('widget-ctx');
+const ctxClickThrough = document.getElementById('ctx-click-through');
 
 let snapshots = {};
 let settings = { floatingWidget: {} };
@@ -21,7 +30,7 @@ let rotateTimer = null;
 let activeProviders = [];
 let lastChromeKey = '';
 let lastRotateKey = '';
-let lastFitCount = -1;
+let lastFitKey = '';
 const lastFingerprints = new Map();
 
 const SIZE_GAUGE = {
@@ -30,11 +39,13 @@ const SIZE_GAUGE = {
   large: { size: 76, stroke: 6 },
 };
 
+const DISPLAY_MODES = ['single', 'grid', 'compact', 'orb'];
+
 function widgetConfig() {
   const fw = settings.floatingWidget || {};
   const size = ['small', 'medium', 'large'].includes(fw.size) ? fw.size : 'medium';
   const theme = fw.theme || 'dark';
-  const displayMode = ['single', 'grid', 'compact'].includes(fw.displayMode) ? fw.displayMode : 'single';
+  const displayMode = DISPLAY_MODES.includes(fw.displayMode) ? fw.displayMode : 'single';
   return {
     pinnedProviders: Array.isArray(fw.pinnedProviders) ? fw.pinnedProviders : [],
     autoRotate: fw.autoRotate === true,
@@ -43,6 +54,7 @@ function widgetConfig() {
     theme,
     opacity: Number.isFinite(fw.opacity) ? fw.opacity : 0.92,
     enabled: fw.enabled === true,
+    clickThrough: fw.clickThrough === true,
   };
 }
 
@@ -76,6 +88,14 @@ function cardHandlers(id) {
     onLogin: () => handleLogin(id),
     onRetry: () => handleRetry(id),
     gauge: gaugeOptions(),
+  };
+}
+
+function orbHandlers(id) {
+  return {
+    sizeKey: widgetConfig().size,
+    onLogin: () => handleLogin(id),
+    onRetry: () => handleRetry(id),
   };
 }
 
@@ -114,22 +134,35 @@ function emptyStateMessage() {
 
 function applyChrome() {
   const cfg = widgetConfig();
-  const chromeKey = `${cfg.size}|${cfg.displayMode}|${cfg.theme}|${cfg.opacity}`;
+  const chromeKey = `${cfg.size}|${cfg.displayMode}|${cfg.theme}|${cfg.opacity}|${cfg.clickThrough}`;
   const changed = chromeKey !== lastChromeKey;
   lastChromeKey = chromeKey;
   root.dataset.theme = cfg.theme;
   root.dataset.size = cfg.size;
   root.dataset.mode = cfg.displayMode;
+  root.classList.toggle('widget--click-through', cfg.clickThrough);
   root.style.setProperty('--widget-opacity', String(cfg.opacity));
   footer.hidden = cfg.displayMode !== 'single' || activeProviders.length <= 1;
+  if (clickBadge) clickBadge.hidden = !cfg.clickThrough;
+  if (ctxClickThrough) {
+    ctxClickThrough.textContent = cfg.clickThrough ? 'Disable click-through' : 'Enable click-through';
+  }
   return changed;
 }
 
-async function fitWindowIfNeeded(count) {
-  if (count === lastFitCount) return;
-  lastFitCount = count;
+function orbSlotCount() {
+  return countOrbSlots(activeProviders, snapshots, placeholderSnap);
+}
+
+async function fitWindowIfNeeded() {
+  const cfg = widgetConfig();
+  const count = activeProviders.length || 0;
+  const slots = cfg.displayMode === 'orb' ? orbSlotCount() : 0;
+  const fitKey = `${cfg.displayMode}|${cfg.size}|${count}|${slots}`;
+  if (fitKey === lastFitKey) return;
+  lastFitKey = fitKey;
   try {
-    await window.apiMeter.fitWidgetWindow(count);
+    await window.apiMeter.fitWidgetWindow(count, slots);
   } catch (err) {
     console.error('fitWidgetWindow failed:', err);
   }
@@ -182,6 +215,44 @@ function renderCompactRow(snap) {
     row.addEventListener('click', () => handleRetry(snap.providerId));
   }
   return row;
+}
+
+function renderOrbMode() {
+  body.className = 'widget-body widget-body--orb';
+  let deck = body.querySelector('.widget-orb-deck');
+  if (!deck) {
+    body.replaceChildren();
+    deck = document.createElement('div');
+    deck.className = 'widget-orb-deck';
+    body.appendChild(deck);
+  }
+
+  const seen = new Set();
+  activeProviders.forEach((id) => {
+    seen.add(id);
+    const snap = placeholderSnap(id);
+    const fp = orbFingerprint(snap);
+    let cluster = deck.querySelector(`[data-provider-id="${id}"]`);
+    if (cluster && cluster.dataset.fingerprint === fp) return;
+    const handlers = orbHandlers(id);
+    if (cluster) {
+      updateOrbCluster(cluster, snap, handlers);
+    } else {
+      const fresh = renderOrbCluster(snap, handlers);
+      fresh.dataset.fingerprint = fp;
+      deck.appendChild(fresh);
+    }
+    lastFingerprints.set(id, fp);
+  });
+
+  deck.querySelectorAll('[data-provider-id]').forEach((cluster) => {
+    if (!seen.has(cluster.dataset.providerId)) {
+      lastFingerprints.delete(cluster.dataset.providerId);
+      cluster.remove();
+    }
+  });
+
+  dots.replaceChildren();
 }
 
 function renderSingleMode() {
@@ -279,27 +350,30 @@ function renderWidget() {
   const chromeChanged = applyChrome();
   if (chromeChanged) {
     lastFingerprints.clear();
-    lastFitCount = -1;
+    lastFitKey = '';
     body.replaceChildren();
   }
 
   if (!activeProviders.length) {
-    body.className = 'widget-body widget-body--empty';
+    body.className = widgetConfig().displayMode === 'orb'
+      ? 'widget-body widget-body--orb widget-body--empty'
+      : 'widget-body widget-body--empty';
     body.innerHTML = `<p class="widget-empty">${emptyStateMessage()}</p>`;
     dots.replaceChildren();
     activeProviderId = null;
     lastFingerprints.clear();
-    fitWindowIfNeeded(0);
+    fitWindowIfNeeded();
     startRotate();
     return;
   }
 
   const cfg = widgetConfig();
-  if (cfg.displayMode === 'grid') renderGridMode();
+  if (cfg.displayMode === 'orb') renderOrbMode();
+  else if (cfg.displayMode === 'grid') renderGridMode();
   else if (cfg.displayMode === 'compact') renderCompactMode();
   else renderSingleMode();
 
-  fitWindowIfNeeded(activeProviders.length);
+  fitWindowIfNeeded();
   startRotate();
 }
 
@@ -324,7 +398,7 @@ function startRotate() {
       const next = activeProviders[(idx + 1) % activeProviders.length];
       activeProviderId = next;
       renderSingleMode();
-      fitWindowIfNeeded(activeProviders.length);
+      fitWindowIfNeeded();
     }, 10000);
   }
 }
@@ -366,11 +440,61 @@ async function applyResize(direction) {
         floatingWidget: { ...settings.floatingWidget, size: nextSize },
       };
       lastChromeKey = '';
+      lastFitKey = '';
       renderWidget();
     }
   } catch (err) {
     console.error('Resize failed:', err);
   }
+}
+
+function hideContextMenu() {
+  if (ctxMenu) ctxMenu.hidden = true;
+}
+
+function showContextMenu(x, y) {
+  if (!ctxMenu) return;
+  ctxMenu.hidden = false;
+  const rect = ctxMenu.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - 4;
+  const maxY = window.innerHeight - rect.height - 4;
+  ctxMenu.style.left = `${Math.max(4, Math.min(x, maxX))}px`;
+  ctxMenu.style.top = `${Math.max(4, Math.min(y, maxY))}px`;
+}
+
+async function toggleClickThrough() {
+  const next = !widgetConfig().clickThrough;
+  try {
+    await window.apiMeter.setWidgetClickThrough(next);
+  } catch (err) {
+    console.error('Click-through toggle failed:', err);
+  }
+  hideContextMenu();
+}
+
+function bindContextMenu() {
+  root?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!ctxMenu?.hidden && !ctxMenu.contains(e.target)) hideContextMenu();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideContextMenu();
+  });
+
+  ctxClickThrough?.addEventListener('click', toggleClickThrough);
+  document.getElementById('ctx-settings')?.addEventListener('click', () => {
+    hideContextMenu();
+    window.apiMeter.openSettings();
+  });
+  document.getElementById('ctx-close')?.addEventListener('click', () => {
+    hideContextMenu();
+    window.apiMeter.toggleFloatingWidget();
+  });
 }
 
 async function init() {
@@ -391,6 +515,8 @@ async function init() {
 
   document.getElementById('widget-prev')?.addEventListener('click', () => stepProvider(-1));
   document.getElementById('widget-next')?.addEventListener('click', () => stepProvider(1));
+
+  bindContextMenu();
 
   try {
     settings = await window.apiMeter.getSettings();

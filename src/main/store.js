@@ -15,6 +15,7 @@ const settings = new Store({
       size: 'medium',
       theme: 'dark',
       opacity: 0.92,
+      clickThrough: false,
     },
     alerts: { enabled: true, warnThreshold: 75, dangerThreshold: 90 },
     providers: {

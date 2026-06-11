@@ -47,6 +47,7 @@ function populateForm(settings) {
   document.getElementById('warn-threshold').value = settings.alerts?.warnThreshold ?? 75;
   document.getElementById('danger-threshold').value = settings.alerts?.dangerThreshold ?? 90;
   document.getElementById('widget-auto-rotate').checked = fw.autoRotate === true;
+  document.getElementById('widget-click-through').checked = fw.clickThrough === true;
   document.getElementById('widget-display-mode').value = fw.displayMode || 'single';
   document.getElementById('widget-size').value = fw.size || 'medium';
   document.getElementById('widget-theme').value = fw.theme || 'dark';
@@ -80,6 +81,7 @@ function collectPatch() {
     floatingWidget: {
       ...(current.floatingWidget || {}),
       autoRotate: document.getElementById('widget-auto-rotate').checked,
+      clickThrough: document.getElementById('widget-click-through').checked,
       displayMode: document.getElementById('widget-display-mode').value,
       size: document.getElementById('widget-size').value,
       theme: document.getElementById('widget-theme').value,
@@ -116,6 +118,7 @@ async function init() {
         floatingWidget: {
           ...(fw),
           autoRotate: document.getElementById('widget-auto-rotate').checked,
+          clickThrough: document.getElementById('widget-click-through').checked,
           displayMode: document.getElementById('widget-display-mode').value,
           size: sizeEl?.value || fw.size || 'medium',
           theme: themeEl?.value || fw.theme || 'dark',

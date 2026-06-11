@@ -53,3 +53,24 @@ test('computeWidgetBounds empty state respects display mode width', () => {
   assert.equal(computeWidgetBounds(grid, 0).width, 320);
   assert.equal(computeWidgetBounds(compact, 0).width, 280);
 });
+
+test('normalizeWidgetSettings includes clickThrough default false', () => {
+  assert.equal(normalizeWidgetSettings({}).clickThrough, false);
+  assert.equal(normalizeWidgetSettings({ clickThrough: true }).clickThrough, true);
+});
+
+test('computeWidgetBounds orb mode is narrower than compact for one provider', () => {
+  const compact = normalizeWidgetSettings({ displayMode: 'compact', size: 'medium' });
+  const orb = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium' });
+  const compactBounds = computeWidgetBounds(compact, 1);
+  const orbBounds = computeWidgetBounds(orb, 1, 2);
+  assert.ok(orbBounds.width < compactBounds.width);
+  assert.ok(orbBounds.height < 120);
+});
+
+test('computeWidgetBounds orb scales with orb slot count', () => {
+  const orb = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium' });
+  const two = computeWidgetBounds(orb, 1, 2);
+  const four = computeWidgetBounds(orb, 2, 4);
+  assert.ok(four.width >= two.width);
+});

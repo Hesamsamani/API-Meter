@@ -84,10 +84,10 @@ function createSettingsWindow() {
   return win;
 }
 
-function applyWidgetWindowBounds(win, fwSettings, providerCount = 1) {
+function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 0) {
   if (!win || win.isDestroyed()) return;
   const fw = normalizeWidgetSettings(fwSettings);
-  const { width, height } = computeWidgetBounds(fw, providerCount);
+  const { width, height } = computeWidgetBounds(fw, providerCount, orbSlots);
   const bounds = win.getBounds();
   win.setBounds({
     x: bounds.x,
@@ -95,6 +95,11 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1) {
     width: Math.round(width),
     height: Math.round(height),
   });
+}
+
+function applyWidgetClickThrough(win, enabled) {
+  if (!win || win.isDestroyed()) return;
+  win.setIgnoreMouseEvents(!!enabled, { forward: true });
 }
 
 function createFloatingWidget(fwSettings = {}) {
@@ -116,6 +121,7 @@ function createFloatingWidget(fwSettings = {}) {
     },
   });
   win.loadFile(path.join(__dirname, '../renderer/floating-widget/index.html'));
+  applyWidgetClickThrough(win, fw.clickThrough);
   return win;
 }
 
@@ -182,5 +188,6 @@ module.exports = {
   showSettings,
   toggleFloatingWidget,
   applyWidgetWindowBounds,
+  applyWidgetClickThrough,
   positionNearTray,
 };

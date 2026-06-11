@@ -17,6 +17,7 @@ const {
   showSettings,
   toggleFloatingWidget,
   applyWidgetWindowBounds,
+  applyWidgetClickThrough,
 } = require('./src/main/windows');
 const {
   normalizeWidgetSettings,
@@ -77,13 +78,14 @@ function applySettingsPatch(patch) {
       console.error('Failed to update launch at startup:', err);
     }
   }
-  if (
-    patch.floatingWidget
-    && floatingWin
-    && !floatingWin.isDestroyed()
-    && floatingWin.isVisible()
-  ) {
-    applyWidgetWindowBounds(floatingWin, settings.get('floatingWidget'), 1);
+  if (patch.floatingWidget && floatingWin && !floatingWin.isDestroyed()) {
+    const fw = settings.get('floatingWidget');
+    if (Object.prototype.hasOwnProperty.call(patch.floatingWidget, 'clickThrough')) {
+      applyWidgetClickThrough(floatingWin, fw.clickThrough);
+    }
+    if (floatingWin.isVisible()) {
+      applyWidgetWindowBounds(floatingWin, fw, 1);
+    }
   }
   alertManager.warn = settings.get('alerts.warnThreshold');
   alertManager.danger = settings.get('alerts.dangerThreshold');
@@ -192,11 +194,22 @@ function registerIpc() {
     return settings.get('floatingWidget.enabled');
   });
 
-  ipcMain.handle('widget:fitWindow', (e, providerCount = 1) => {
+  ipcMain.handle('widget:fitWindow', (e, providerCount = 1, orbSlots = 0) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (!win) return null;
-    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
+    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount, orbSlots);
     return win.getSize();
+  });
+
+  ipcMain.handle('widget:setClickThrough', (e, enabled) => {
+    const on = !!enabled;
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    settings.set('floatingWidget', { ...fw, clickThrough: on });
+    const win = BrowserWindow.fromWebContents(e.sender)
+      || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
+    if (win) applyWidgetClickThrough(win, on);
+    broadcastSettings();
+    return on;
   });
 
   ipcMain.handle('widget:resize', (e, direction = 1, providerCount = 1) => {

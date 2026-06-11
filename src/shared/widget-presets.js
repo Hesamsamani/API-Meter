@@ -99,6 +99,7 @@ const WIDGET_DISPLAY_MODES = {
   single: { key: 'single', label: 'Single' },
   grid: { key: 'grid', label: 'Grid' },
   compact: { key: 'compact', label: 'List' },
+  orb: { key: 'orb', label: 'Orbs' },
 };
 
 const SIZE_ORDER = ['small', 'medium', 'large'];
@@ -113,6 +114,7 @@ function normalizeWidgetSettings(fw = {}) {
     size: WIDGET_SIZES[fw.size] ? fw.size : 'medium',
     theme: WIDGET_THEMES[fw.theme] ? fw.theme : 'dark',
     opacity: Number.isFinite(fw.opacity) ? Math.min(1, Math.max(0.5, fw.opacity)) : 0.92,
+    clickThrough: fw.clickThrough === true,
   };
 }
 
@@ -145,24 +147,49 @@ const GRID_CARD_HEIGHT = { small: 162, medium: 184, large: 200 };
 const SINGLE_CARD_HEIGHT = { small: 150, medium: 172, large: 194 };
 const SINGLE_FOOTER_MULTI = 30;
 const SINGLE_FOOTER_SINGLE = 12;
+const ORB_SIZE = { small: 34, medium: 42, large: 50 };
+const ORB_LABEL = 12;
+const ORB_GAP = 5;
+const ORB_CLUSTER_GAP = 10;
+const ORB_HEADER = 22;
 
 function widgetWidthForMode(preset, displayMode) {
   if (displayMode === 'grid') return preset.gridWidth;
   if (displayMode === 'compact') return preset.compactWidth;
+  if (displayMode === 'orb') return preset.compactWidth;
   return preset.width;
 }
 
-function computeWidgetBounds(fw, providerCount = 1) {
+function computeOrbBounds(fw, providerCount, orbSlots = 0) {
+  const orbSize = ORB_SIZE[fw.size] || ORB_SIZE.medium;
+  const slots = Math.max(1, orbSlots || providerCount * 2);
+  const perRow = fw.size === 'small' ? 4 : fw.size === 'large' ? 6 : 5;
+  const rows = Math.max(1, Math.ceil(slots / perRow));
+  const slotsFirstRow = Math.min(slots, perRow);
+  const rowHeight = orbSize + ORB_LABEL + 4;
+
+  return {
+    width: 14 + slotsFirstRow * orbSize + Math.max(0, slotsFirstRow - 1) * ORB_GAP + 14,
+    height: ORB_HEADER + 10 + rows * rowHeight + Math.max(0, rows - 1) * ORB_CLUSTER_GAP + 8,
+  };
+}
+
+function computeWidgetBounds(fw, providerCount = 1, orbSlots = 0) {
   const preset = WIDGET_SIZES[fw.size] || WIDGET_SIZES.medium;
 
   if (providerCount === 0) {
+    const emptyH = fw.displayMode === 'orb' ? ORB_HEADER + 40 : HEADER_HEIGHT + BODY_PADDING + EMPTY_BODY_HEIGHT;
     return {
       width: widgetWidthForMode(preset, fw.displayMode),
-      height: HEADER_HEIGHT + BODY_PADDING + EMPTY_BODY_HEIGHT,
+      height: emptyH,
     };
   }
 
   const count = Math.max(1, providerCount);
+
+  if (fw.displayMode === 'orb') {
+    return computeOrbBounds(fw, count, orbSlots);
+  }
 
   if (fw.displayMode === 'grid') {
     const cols = fw.size === 'small' ? 1 : 2;

@@ -65,7 +65,12 @@
             <option value="single">Single provider</option>
             <option value="grid">Grid (all pinned)</option>
             <option value="compact">Compact list</option>
+            <option value="orb">Orbs (minimal)</option>
           </select>
+        </label>
+        <label class="field-check">
+          <input type="checkbox" id="widget-click-through">
+          <span>Click-through mode (Rainmeter-style — right-click widget to toggle)</span>
         </label>
         <label class="field-row">
           <span>Size</span>
@@ -93,7 +98,7 @@
           <input type="checkbox" id="widget-auto-rotate">
           <span>Auto-rotate (single mode, 10s)</span>
         </label>
-        <p class="field-hint">Pin providers to control what appears in grid/list mode. Use −/+ and ◐ on the widget for quick resize and theme. Toggle widget from tray.</p>
+        <p class="field-hint">Pin providers for grid/list/orb modes. Orbs show logo + remaining % rings per limit (e.g. Claude 5H + 7D). Right-click widget for click-through. Use −/+ and ◐ for quick resize/theme.</p>
         <div class="widget-pin-grid" id="widget-pin-grid"></div>
       </section>
 
