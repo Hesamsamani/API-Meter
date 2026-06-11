@@ -61,7 +61,12 @@ async function importCookiesFromPaste(opts, rawInput) {
 
 async function verifyImportedSession(opts) {
   if (!opts.probeUrl) return true;
-  await fetchViaWindow(opts.probeUrl);
+  const body = await fetchViaWindow(opts.probeUrl, {
+    expectJson: opts.probeExpectJson !== false,
+  });
+  if (opts.probeExpectJson === false && typeof body === 'string' && body.length < 8) {
+    throw new Error('Empty response — session may be invalid');
+  }
   return true;
 }
 
