@@ -6,6 +6,7 @@ const widgetPinGrid = document.getElementById('widget-pin-grid');
 const btnClose = document.getElementById('btn-close');
 
 let current = {};
+let formDirty = false;
 
 function renderProviderToggles(providers) {
   providerToggles.replaceChildren();
@@ -99,12 +100,42 @@ async function init() {
     console.error('Failed to load settings:', err);
   }
 
-  window.apiMeter.onSettingsUpdated((settings) => populateForm(settings));
+  window.apiMeter.onSettingsUpdated((incoming) => {
+    if (formDirty) {
+      const fw = incoming.floatingWidget || {};
+      const sizeEl = document.getElementById('widget-size');
+      const themeEl = document.getElementById('widget-theme');
+      if (sizeEl && fw.size) sizeEl.value = fw.size;
+      if (themeEl && fw.theme) themeEl.value = fw.theme;
+      const pinnedProviders = [];
+      widgetPinGrid?.querySelectorAll('[data-widget-pin]').forEach((input) => {
+        if (input.checked) pinnedProviders.push(input.dataset.widgetPin);
+      });
+      current = {
+        ...current,
+        floatingWidget: {
+          ...(fw),
+          autoRotate: document.getElementById('widget-auto-rotate').checked,
+          displayMode: document.getElementById('widget-display-mode').value,
+          size: sizeEl?.value || fw.size || 'medium',
+          theme: themeEl?.value || fw.theme || 'dark',
+          opacity: Number(document.getElementById('widget-opacity').value) / 100,
+          pinnedProviders,
+        },
+      };
+      return;
+    }
+    populateForm(incoming);
+  });
+
+  form?.addEventListener('input', () => { formDirty = true; });
+  form?.addEventListener('change', () => { formDirty = true; });
 
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
       current = await window.apiMeter.updateSettings(collectPatch());
+      formDirty = false;
       populateForm(current);
     } catch (err) {
       console.error('Save failed:', err);

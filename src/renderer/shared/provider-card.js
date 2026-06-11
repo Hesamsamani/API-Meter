@@ -125,7 +125,16 @@ function bindEmptyCardActions(el, snapshot, { onLogin, onRetry } = {}) {
   }
 }
 
-export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogin, onRetry } = {}) {
+function resolveGaugeDims(variant, gauge = {}) {
+  const defaultSize = variant === 'mini' ? 64 : 88;
+  const defaultStroke = variant === 'mini' ? 5 : 6;
+  return {
+    size: Number.isFinite(gauge.size) ? gauge.size : defaultSize,
+    stroke: Number.isFinite(gauge.stroke) ? gauge.stroke : defaultStroke,
+  };
+}
+
+export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogin, onRetry, gauge = {} } = {}) {
   const meta = PROVIDER_META[snapshot?.providerId] || { label: snapshot?.providerId, accent: 'var(--muted)', initials: '??' };
   const el = document.createElement('article');
   el.className = `provider-card provider-card--${variant}`;
@@ -141,8 +150,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   const primary = snapshot.windows[0];
   const util = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
-  const gaugeSize = variant === 'mini' ? 64 : 88;
-  const gaugeStroke = variant === 'mini' ? 5 : 6;
+  const { size: gaugeSize, stroke: gaugeStroke } = resolveGaugeDims(variant, gauge);
 
   const planLabel = snapshot.plan || 'Unknown';
 
@@ -161,7 +169,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   `;
 
   el.querySelector('.gauge-wrap').appendChild(
-    renderGauge(primary?.utilization ?? util, { size: gaugeSize, stroke: gaugeStroke, variant })
+    renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant })
   );
 
   if (onClick) el.addEventListener('click', () => onClick(snapshot));
@@ -203,20 +211,21 @@ function buildEmptyCard(meta, snapshot, { onLogin, onRetry } = {}) {
   `;
 }
 
-function replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry } = {}) {
-  const fresh = renderProviderCard(snapshot, { onClick, variant, onLogin, onRetry });
+function replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry, gauge } = {}) {
+  const fresh = renderProviderCard(snapshot, { onClick, variant, onLogin, onRetry, gauge });
   fresh.classList.add('provider-card--settled');
   el.replaceWith(fresh);
   return fresh;
 }
 
-export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry } = {}) {
+export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry, gauge = {} } = {}) {
   const variant = el.classList.contains('provider-card--mini') ? 'mini' : 'full';
   const wasEmpty = !!el.querySelector('.card-empty');
   const nowEmpty = cardShowsEmpty(snapshot);
+  const { size: gaugeSize, stroke: gaugeStroke } = resolveGaugeDims(variant, gauge);
 
   if (wasEmpty !== nowEmpty) {
-    return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry });
+    return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry, gauge });
   }
 
   if (nowEmpty) {
@@ -231,7 +240,7 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry } =
     if (status) status.className = `card-status ${statusClass(snapshot)}`;
 
     if (hadLoginBtn !== wantsLoginBtn || hadRetryBtn !== wantsRetryBtn) {
-      return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry });
+      return replaceProviderCard(el, snapshot, { onClick, variant, onLogin, onRetry, gauge });
     }
 
     const empty = el.querySelector('.card-empty');
@@ -266,9 +275,19 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry } =
   const util = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const gaugeEl = el.querySelector('.gauge');
+  const gaugeWrap = el.querySelector('.gauge-wrap');
 
   if (gaugeEl) {
-    updateGauge(gaugeEl, primary?.utilization ?? util);
+    const svg = gaugeEl.querySelector('svg');
+    const currentSize = Number(svg?.getAttribute('width'));
+    const currentStroke = Number(gaugeEl.querySelector('.gauge-ring-fg')?.getAttribute('stroke-width'));
+    if ((currentSize !== gaugeSize || currentStroke !== gaugeStroke) && gaugeWrap) {
+      gaugeWrap.replaceChildren(
+        renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant }),
+      );
+    } else {
+      updateGauge(gaugeEl, util);
+    }
   }
 
   const stats = el.querySelector('.stats');

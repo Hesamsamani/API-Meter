@@ -135,30 +135,59 @@ function nextTheme(current) {
  * @param {ReturnType<typeof normalizeWidgetSettings>} fw
  * @param {number} providerCount
  */
+const HEADER_HEIGHT = 35;
+const BODY_PADDING = 16;
+const GRID_GAP = 6;
+const COMPACT_GAP = 4;
+const COMPACT_ROW_HEIGHT = 29;
+const EMPTY_BODY_HEIGHT = 52;
+const GRID_CARD_HEIGHT = { small: 162, medium: 184, large: 200 };
+const SINGLE_CARD_HEIGHT = { small: 150, medium: 172, large: 194 };
+const SINGLE_FOOTER_MULTI = 30;
+const SINGLE_FOOTER_SINGLE = 12;
+
+function widgetWidthForMode(preset, displayMode) {
+  if (displayMode === 'grid') return preset.gridWidth;
+  if (displayMode === 'compact') return preset.compactWidth;
+  return preset.width;
+}
+
 function computeWidgetBounds(fw, providerCount = 1) {
   const preset = WIDGET_SIZES[fw.size] || WIDGET_SIZES.medium;
+
+  if (providerCount === 0) {
+    return {
+      width: widgetWidthForMode(preset, fw.displayMode),
+      height: HEADER_HEIGHT + BODY_PADDING + EMPTY_BODY_HEIGHT,
+    };
+  }
+
   const count = Math.max(1, providerCount);
-  const header = 34;
-  const footer = fw.displayMode === 'single' ? 28 : 12;
-  const padding = 16;
 
   if (fw.displayMode === 'grid') {
     const cols = fw.size === 'small' ? 1 : 2;
     const rows = Math.ceil(count / cols);
+    const rowHeight = GRID_CARD_HEIGHT[fw.size] || GRID_CARD_HEIGHT.medium;
     return {
       width: preset.gridWidth,
-      height: header + padding + rows * preset.gridRowHeight + footer,
+      height: HEADER_HEIGHT + BODY_PADDING + rows * rowHeight + Math.max(0, rows - 1) * GRID_GAP,
     };
   }
 
   if (fw.displayMode === 'compact') {
     return {
       width: preset.compactWidth,
-      height: header + padding + count * preset.compactRowHeight + footer,
+      height: HEADER_HEIGHT + BODY_PADDING + count * COMPACT_ROW_HEIGHT
+        + Math.max(0, count - 1) * COMPACT_GAP + 8,
     };
   }
 
-  return { width: preset.width, height: preset.height };
+  const cardHeight = SINGLE_CARD_HEIGHT[fw.size] || SINGLE_CARD_HEIGHT.medium;
+  const footer = count > 1 ? SINGLE_FOOTER_MULTI : SINGLE_FOOTER_SINGLE;
+  return {
+    width: preset.width,
+    height: HEADER_HEIGHT + BODY_PADDING + cardHeight + footer,
+  };
 }
 
 module.exports = {

@@ -77,6 +77,14 @@ function applySettingsPatch(patch) {
       console.error('Failed to update launch at startup:', err);
     }
   }
+  if (
+    patch.floatingWidget
+    && floatingWin
+    && !floatingWin.isDestroyed()
+    && floatingWin.isVisible()
+  ) {
+    applyWidgetWindowBounds(floatingWin, settings.get('floatingWidget'), 1);
+  }
   alertManager.warn = settings.get('alerts.warnThreshold');
   alertManager.danger = settings.get('alerts.dangerThreshold');
   scheduler.restart();
@@ -191,17 +199,24 @@ function registerIpc() {
     return win.getSize();
   });
 
-  ipcMain.handle('widget:resize', (e, direction = 1) => {
+  ipcMain.handle('widget:resize', (e, direction = 1, providerCount = 1) => {
     const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
     const next = direction > 0 ? nextSize(fw.size) : prevSize(fw.size);
+    if (next === fw.size) return next;
     settings.set('floatingWidget', { ...fw, size: next });
+    const win = BrowserWindow.fromWebContents(e.sender)
+      || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
+    if (win) {
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
+    }
     broadcastSettings();
     return next;
   });
 
-  ipcMain.handle('widget:cycleTheme', () => {
+  ipcMain.handle('widget:cycleTheme', (e) => {
     const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
     const theme = nextTheme(fw.theme);
+    if (theme === fw.theme) return theme;
     settings.set('floatingWidget', { ...fw, theme });
     broadcastSettings();
     return theme;
@@ -267,6 +282,7 @@ app.whenReady().then(() => {
         },
         settings,
       });
+      broadcastSettings();
     },
     onSettings: () => showSettings(getSettingsWin),
     getLaunchAtStartup: () => settings.get('launchAtStartup', false),

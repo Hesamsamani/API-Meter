@@ -88,7 +88,13 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1) {
   if (!win || win.isDestroyed()) return;
   const fw = normalizeWidgetSettings(fwSettings);
   const { width, height } = computeWidgetBounds(fw, providerCount);
-  win.setSize(Math.round(width), Math.round(height));
+  const bounds = win.getBounds();
+  win.setBounds({
+    x: bounds.x,
+    y: bounds.y,
+    width: Math.round(width),
+    height: Math.round(height),
+  });
 }
 
 function createFloatingWidget(fwSettings = {}) {
@@ -160,7 +166,6 @@ function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }
     win.hide();
     settings.set('floatingWidget.enabled', false);
   } else {
-    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
     win.show();
     settings.set('floatingWidget.enabled', true);
   }

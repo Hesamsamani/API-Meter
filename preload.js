@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   showDashboard: () => ipcRenderer.invoke('app:showDashboard'),
   toggleFloatingWidget: () => ipcRenderer.invoke('app:toggleWidget'),
   fitWidgetWindow: (providerCount) => ipcRenderer.invoke('widget:fitWindow', providerCount),
-  resizeWidget: (direction) => ipcRenderer.invoke('widget:resize', direction),
+  resizeWidget: (direction, providerCount) => ipcRenderer.invoke('widget:resize', direction, providerCount),
   cycleWidgetTheme: () => ipcRenderer.invoke('widget:cycleTheme'),
   cancelAuthPrompt: () => ipcRenderer.invoke('auth-prompt:cancel'),
   retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),
