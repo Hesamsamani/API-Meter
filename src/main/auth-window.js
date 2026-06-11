@@ -5,11 +5,9 @@ const { getPreloadPath } = require('./assets');
 const {
   getProviderSession,
   findSessionCookies,
-  findAllDomainCookies,
   cookieUrlsFor,
   setCookies,
   flushCookies,
-  syncElectronCookiesToPartition,
 } = require('./provider-session');
 const {
   looksLikeCookiePaste,
@@ -138,9 +136,18 @@ function pickPrimaryCookie(hits, names) {
   return hits.find((h) => h?.value) || hits[0] || null;
 }
 
-async function persistCapturedCookies(opts, hits) {
-  const list = Array.isArray(hits) ? hits : [hits];
+function cookiesToPersist(hits, opts) {
   const names = opts.cookieNames || [opts.cookieName].filter(Boolean);
+  const list = Array.isArray(hits) ? hits : [hits];
+  if (!names.length) return list.filter((h) => h?.name && h?.value);
+
+  const named = list.filter((h) => h?.name && h?.value && names.includes(h.name));
+  return named.length ? named : list.filter((h) => h?.name && h?.value);
+}
+
+async function persistCapturedCookies(opts, hits) {
+  const names = opts.cookieNames || [opts.cookieName].filter(Boolean);
+  const list = cookiesToPersist(hits, opts);
   const primary = pickPrimaryCookie(list, names);
   if (!primary?.value) return null;
 
@@ -148,26 +155,21 @@ async function persistCapturedCookies(opts, hits) {
   if (primary.name) setSecret(`${opts.secretKey}-cookie-name`, primary.name);
 
   const ses = getProviderSession();
-  for (const hit of list) {
-    if (!hit?.value || !hit.name) continue;
-    const host = (hit.domain || opts.domain || '').replace(/^\./, '') || 'localhost';
-    const scheme = hit.secure !== false ? 'https' : 'http';
-    await setCookies(ses, [{
-      url: hit.domain ? `${scheme}://${host}${hit.path || '/'}` : (opts.loginUrl || `${scheme}://${host}/`),
-      name: hit.name,
-      value: hit.value,
-      domain: hit.domain || opts.domain,
-      path: hit.path || '/',
-      secure: hit.secure !== false,
-      httpOnly: hit.httpOnly === true,
-      sameSite: 'no_restriction',
-    }]);
-  }
+  const toSet = list.map((hit) => ({
+    name: hit.name,
+    value: hit.value,
+    domain: hit.domain || opts.domain,
+    path: hit.path || '/',
+    secure: hit.secure !== false,
+    httpOnly: hit.httpOnly === true,
+    sameSite: hit.sameSite || 'lax',
+    expirationDate: hit.expirationDate,
+  }));
 
-  await syncElectronCookiesToPartition({
+  await setCookies(ses, toSet, {
     loginUrl: opts.loginUrl,
     domain: opts.domain,
-    cookieNames: names,
+    requiredNames: [primary.name],
   });
   await flushCookies(ses);
   return primary;
@@ -183,15 +185,7 @@ async function tryCaptureInAppCookie(opts) {
   });
   if (!sessionHits.length) return null;
 
-  const allDomain = opts.domain
-    ? await findAllDomainCookies(ses, opts.domain)
-    : [];
-  const merged = new Map();
-  for (const c of [...allDomain, ...sessionHits]) {
-    if (c?.value && c.name) merged.set(c.name, c);
-  }
-  const hits = [...merged.values()];
-
+  const hits = sessionHits;
   const primary = pickPrimaryCookie(hits, names);
   if (!primary?.value) return null;
 

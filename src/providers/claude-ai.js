@@ -6,7 +6,6 @@ const {
   setCookies,
   flushCookies,
   clearProviderCookies,
-  syncElectronCookiesToPartition,
   findSessionCookies,
   cookieUrlsFor,
 } = require('../main/provider-session');
@@ -73,8 +72,6 @@ async function ensureClaudeSession(storedValue) {
     cookieNames: CLAUDE_COOKIE_NAMES,
   };
 
-  await syncElectronCookiesToPartition(sessionOpts);
-
   const existing = await findSessionCookies(ses, {
     urls: cookieUrlsFor(sessionOpts),
     domain: CLAUDE_DOMAIN,
@@ -84,15 +81,17 @@ async function ensureClaudeSession(storedValue) {
   if (!existing.length && storedValue) {
     const cookieName = getSecret('claude-ai-session-cookie-name') || 'sessionKey';
     await setCookies(ses, [{
-      url: CLAUDE_ORIGIN,
       name: cookieName,
       value: storedValue,
       domain: CLAUDE_DOMAIN,
       path: '/',
       secure: true,
-      httpOnly: true,
-      sameSite: 'no_restriction',
-    }]);
+      sameSite: 'lax',
+    }], {
+      loginUrl: CLAUDE_ORIGIN,
+      domain: CLAUDE_DOMAIN,
+      requiredNames: [cookieName],
+    });
   }
 
   await flushCookies(ses);

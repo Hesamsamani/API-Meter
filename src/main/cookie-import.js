@@ -53,21 +53,26 @@ async function importCookiesFromPaste(opts, rawInput) {
   const defaultDomain = opts.domain;
   const loginUrl = opts.loginUrl || `https://${(defaultDomain || '').replace(/^\./, '')}/`;
 
-  const toSet = relevant
-    .filter((c) => c.name && c.value != null)
-    .map((c) => ({
-      url: c.domain ? cookieSetUrl(c) : loginUrl,
-      name: c.name,
-      value: c.value,
-      domain: c.domain || defaultDomain,
-      path: c.path || '/',
-      secure: c.secure !== false,
-      httpOnly: c.httpOnly === true,
-      sameSite: c.sameSite || 'no_restriction',
-      expirationDate: c.expirationDate,
-    }));
+  const named = relevant.filter((c) => c.name && c.value != null && preferred.includes(c.name));
+  const toImport = named.length ? named : relevant.filter((c) => c.name && c.value != null);
 
-  await setCookies(ses, toSet);
+  const toSet = toImport.map((c) => ({
+    url: c.domain ? cookieSetUrl(c) : loginUrl,
+    name: c.name,
+    value: c.value,
+    domain: c.domain || defaultDomain,
+    path: c.path || '/',
+    secure: c.secure !== false,
+    httpOnly: c.httpOnly === true,
+    sameSite: c.sameSite || 'lax',
+    expirationDate: c.expirationDate,
+  }));
+
+  await setCookies(ses, toSet, {
+    loginUrl,
+    domain: defaultDomain,
+    requiredNames: [primary.name],
+  });
   await flushCookies(ses);
 
   setSecret(opts.secretKey, primary.value);

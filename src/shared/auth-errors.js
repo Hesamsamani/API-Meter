@@ -10,6 +10,7 @@ const AUTH_ERROR_PATTERNS = [
   /not logged/i,
   /expired/i,
   /disconnected/i,
+  /setting cookie/i,
   /org not found/i,
   /invalidjson/i,
   /rate limit/i,

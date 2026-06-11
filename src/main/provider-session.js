@@ -6,21 +6,132 @@ function getProviderSession() {
   return session.fromPartition(PARTITION);
 }
 
+function cookieSetUrlFromParts({ domain, path, secure }) {
+  const host = (domain || '').replace(/^\./, '') || 'localhost';
+  const scheme = secure !== false ? 'https' : 'http';
+  const p = path?.startsWith('/') ? path : `/${path || ''}`;
+  return `${scheme}://${host}${p}`;
+}
+
+function normalizeSameSite(val) {
+  const v = String(val || '').toLowerCase();
+  if (v === 'none') return 'no_restriction';
+  if (['unspecified', 'no_restriction', 'lax', 'strict'].includes(v)) return v;
+  return 'lax';
+}
+
 /**
- * @param {import('electron').Session} ses
- * @param {import('electron').CookiesSetDetails} details
+ * Build Electron-safe cookie.set details with url/domain alignment.
+ * @param {object} raw
+ * @param {{ domain?: string, loginUrl?: string, sameSite?: string }} [fallback]
  */
-async function setCookie(ses, details) {
-  await ses.cookies.set(details);
+function buildCookieSetDetails(raw, fallback = {}) {
+  const name = raw?.name;
+  const value = raw?.value == null ? '' : String(raw.value);
+  if (!name || !value) return null;
+
+  const domain = raw.domain || fallback.domain;
+  const path = raw.path || '/';
+  const secure = raw.secure !== false;
+  let url = raw.url || fallback.loginUrl || cookieSetUrlFromParts({ domain, path, secure });
+
+  const details = {
+    url,
+    name,
+    value,
+    path: path || '/',
+    secure,
+    sameSite: normalizeSameSite(raw.sameSite || fallback.sameSite || 'lax'),
+  };
+
+  if (name.startsWith('__Host-')) {
+    details.path = '/';
+    details.secure = true;
+    const host = (domain || fallback.domain || '').replace(/^\./, '') || 'localhost';
+    details.url = `https://${host}/`;
+  } else if (domain) {
+    const host = domain.replace(/^\./, '');
+    details.domain = domain.startsWith('.') ? domain : `.${host}`;
+    try {
+      const parsed = new URL(details.url);
+      if (!parsed.hostname.endsWith(host)) {
+        details.url = cookieSetUrlFromParts({ domain, path: details.path, secure });
+      }
+    } catch {
+      details.url = cookieSetUrlFromParts({ domain, path: details.path, secure });
+    }
+  }
+
+  if (raw.httpOnly === true) details.httpOnly = true;
+  if (Number.isFinite(raw.expirationDate)) details.expirationDate = raw.expirationDate;
+
+  return details;
 }
 
 /**
  * @param {import('electron').Session} ses
- * @param {import('electron').CookiesSetDetails[]} cookies
+ * @param {object} raw
+ * @param {{ domain?: string, loginUrl?: string }} [fallback]
  */
-async function setCookies(ses, cookies) {
+async function setCookie(ses, raw, fallback = {}) {
+  const details = buildCookieSetDetails(raw, fallback);
+  if (!details) return false;
+
+  const attempts = [
+    details,
+    { ...details, httpOnly: undefined },
+    { ...details, sameSite: 'lax', httpOnly: undefined },
+    { ...details, sameSite: 'unspecified', httpOnly: undefined },
+    {
+      url: details.url,
+      name: details.name,
+      value: details.value,
+      path: details.path || '/',
+      secure: details.secure,
+      ...(details.domain ? { domain: details.domain } : {}),
+    },
+    {
+      url: details.url,
+      name: details.name,
+      value: details.value,
+      path: details.path || '/',
+      secure: details.secure,
+    },
+  ];
+
+  let lastErr;
+  for (const attempt of attempts) {
+    try {
+      await ses.cookies.set(attempt);
+      return true;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw new Error(`Setting cookie failed (${details.name}): ${lastErr?.message || lastErr}`);
+}
+
+/**
+ * @param {import('electron').Session} ses
+ * @param {object[]} cookies
+ * @param {{ domain?: string, loginUrl?: string, requiredNames?: string[] }} [opts]
+ */
+async function setCookies(ses, cookies, opts = {}) {
+  const required = new Set(opts.requiredNames || []);
+  const failures = [];
+
   for (const cookie of cookies) {
-    await setCookie(ses, cookie);
+    try {
+      await setCookie(ses, cookie, opts);
+    } catch (err) {
+      failures.push(err);
+      if (required.has(cookie.name)) throw err;
+    }
+  }
+
+  if (failures.length && failures.length === cookies.length) {
+    throw failures[0];
   }
 }
 
@@ -117,6 +228,7 @@ async function findSessionCookie(ses, opts) {
   return hits[0] || null;
 }
 
+/** Cookies already live in the partition after login/import — just locate the primary. */
 async function syncElectronCookiesToPartition(opts) {
   const ses = getProviderSession();
   const names = opts.cookieNames || [opts.cookieName].filter(Boolean);
@@ -126,21 +238,7 @@ async function syncElectronCookiesToPartition(opts) {
     names,
   });
   if (!hits.length) return null;
-
-  const primary = hits.find((c) => names.includes(c.name)) || hits[0];
-  for (const hit of hits) {
-    await setCookies(ses, [{
-      url: opts.loginUrl || `https://${hit.domain?.replace(/^\./, '') || 'localhost'}`,
-      name: hit.name,
-      value: hit.value,
-      domain: hit.domain || opts.domain,
-      path: hit.path || '/',
-      secure: hit.secure !== false,
-      sameSite: 'no_restriction',
-    }]);
-  }
-  await flushCookies(ses);
-  return primary;
+  return hits.find((c) => names.includes(c.name)) || hits[0];
 }
 
 async function clearProviderCookies({ domain, names = [] }) {
@@ -168,6 +266,7 @@ async function clearProviderCookies({ domain, names = [] }) {
 module.exports = {
   PARTITION,
   getProviderSession,
+  buildCookieSetDetails,
   setCookie,
   setCookies,
   flushCookies,
