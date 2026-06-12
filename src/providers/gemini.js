@@ -35,8 +35,10 @@ function geminiAuthWindowOptions() {
 async function clearGeminiAuthState({ disconnect = true, purgeAllGoogleCookies = false } = {}) {
   const { setSecret, setProviderDisconnected } = require('../main/store');
   const { clearProviderCookies, flushCookies, getProviderSession } = require('../main/provider-session');
+  const { clearGeminiCookieJar } = require('../main/gemini-cookie-jar');
   setSecret('gemini-session', '');
   setSecret('gemini-session-cookie-name', '');
+  clearGeminiCookieJar();
   setProviderDisconnected('gemini', disconnect);
   await clearProviderCookies({
     domain: '.google.com',
@@ -229,28 +231,9 @@ function extractGeminiQuota(inner) {
 }
 
 async function prepareGeminiSession() {
-  const { getProviderSession, setCookies, flushCookies, syncElectronCookiesToPartition } = require('../main/provider-session');
-  const sid = getSecret('gemini-session');
-  if (!sid) throw new Error('Gemini login required');
-  const cookieName = getSecret('gemini-session-cookie-name') || '__Secure-1PSID';
-  const ses = getProviderSession();
-  await setCookies(ses, [
-    {
-      url: 'https://gemini.google.com',
-      name: cookieName,
-      value: sid,
-      domain: '.google.com',
-      path: '/',
-      secure: true,
-      sameSite: 'no_restriction',
-    },
-  ]);
-  await syncElectronCookiesToPartition({
-    loginUrl: GEMINI_USAGE_PAGE_URL,
-    domain: '.google.com',
-    cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
-  });
-  await flushCookies(ses);
+  const { ensureGeminiCookiesInPartition } = require('../main/gemini-cookie-jar');
+  if (!getSecret('gemini-session')) throw new Error('Gemini login required');
+  await ensureGeminiCookiesInPartition();
 }
 
 async function fetchGeminiFromUsagePage() {

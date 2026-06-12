@@ -34,6 +34,11 @@ test('gemini adapter exposes reset that purges google cookies and reopens auth',
   assert.match(geminiSrc, /externalBrowser:\s*true/);
 });
 
+test('prepareGeminiSession does not overwrite imported partition cookies', () => {
+  assert.match(geminiSrc, /ensureGeminiCookiesInPartition/);
+  assert.doesNotMatch(geminiSrc, /syncElectronCookiesToPartition/);
+});
+
 test('fetchLiveGemini prefers official usage page then batchexecute fallback', () => {
   assert.equal(GEMINI_USAGE_PAGE_URL, 'https://gemini.google.com/usage?pageId=none');
   assert.match(geminiSrc, /fetchGeminiFromUsagePage/);

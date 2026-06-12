@@ -16,6 +16,7 @@ const {
   formatImportSummary,
 } = require('./cookie-import');
 const { CHROME_UA } = require('../shared/ua');
+const { cookieSetUrl } = require('../shared/parse-cookies');
 const { openChromiumUrl } = require('./open-chromium');
 const { readBrowserCookie, diagnoseBrowserCookie } = require('./browser-cookies');
 
@@ -205,6 +206,13 @@ async function persistCapturedCookies(opts, hits) {
     requiredNames: [primary.name],
   });
   await flushCookies(ses);
+  if (opts.secretKey === 'gemini-session') {
+    const { saveGeminiCookieJar } = require('./gemini-cookie-jar');
+    saveGeminiCookieJar(toSet.map((hit) => ({
+      ...hit,
+      url: hit.domain ? cookieSetUrl(hit) : opts.loginUrl,
+    })));
+  }
   return primary;
 }
 

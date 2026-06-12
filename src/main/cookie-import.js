@@ -120,6 +120,10 @@ async function importCookiesFromPaste(opts, rawInput) {
 
   setSecret(opts.secretKey, primary.value);
   setSecret(`${opts.secretKey}-cookie-name`, primary.name);
+  if (opts.secretKey === 'gemini-session') {
+    const { saveGeminiCookieJar } = require('./gemini-cookie-jar');
+    saveGeminiCookieJar(toSet);
+  }
 
   return {
     primary,
