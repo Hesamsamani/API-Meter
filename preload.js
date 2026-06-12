@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('apiMeter', {
   submitAuthPrompt: (value) => ipcRenderer.invoke('auth-prompt:submit', value),
   setAuthTab: (tab) => ipcRenderer.invoke('auth-prompt:set-tab', tab),
   readClipboardCookies: () => ipcRenderer.invoke('auth-prompt:read-clipboard'),
+  openExternalAuth: () => ipcRenderer.invoke('auth-prompt:open-external'),
+  importBrowserCookies: () => ipcRenderer.invoke('auth-prompt:import-browser'),
   onAuthPromptInit: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('auth-prompt:init', listener);

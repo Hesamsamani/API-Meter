@@ -7,8 +7,12 @@ const cookieHintEl = document.getElementById('auth-cookie-hint');
 const importBtn = document.getElementById('auth-import');
 const readClipBtn = document.getElementById('auth-read-clipboard');
 const scanMetaEl = document.getElementById('auth-scan-meta');
+const tabsEl = document.querySelector('.auth-tabs');
+const tabBrowser = document.getElementById('tab-browser');
+const tabExternal = document.getElementById('tab-external');
 
 let activeTab = 'browser';
+let authMode = 'embedded';
 
 function setStatus(text, mode = 'waiting') {
   statusEl.textContent = text;
@@ -19,16 +23,36 @@ function setScanMeta(text) {
   if (scanMetaEl) scanMetaEl.textContent = text || '';
 }
 
+function configureAuthMode(mode) {
+  authMode = mode === 'external' ? 'external' : 'embedded';
+  if (tabsEl) tabsEl.classList.toggle('auth-tabs--dual', authMode === 'external');
+  if (tabBrowser) tabBrowser.hidden = authMode === 'external';
+  if (tabExternal) tabExternal.hidden = authMode !== 'external';
+}
+
 function setTab(tab) {
-  activeTab = tab === 'paste' ? 'paste' : 'browser';
+  if (tab === 'paste') activeTab = 'paste';
+  else if (tab === 'external' || (tab === 'browser' && authMode === 'external')) activeTab = 'external';
+  else activeTab = 'browser';
+
   document.querySelectorAll('.auth-tab').forEach((btn) => {
-    const on = btn.dataset.tab === activeTab;
-    btn.classList.toggle('active', on);
-    btn.setAttribute('aria-selected', String(on));
+    const target = btn.dataset.tab;
+    const visible = authMode === 'external'
+      ? target !== 'browser'
+      : target !== 'external';
+    const on = (authMode === 'external' && target === 'external' && activeTab === 'external')
+      || (authMode !== 'external' && target === 'browser' && activeTab === 'browser')
+      || (target === 'paste' && activeTab === 'paste');
+    btn.classList.toggle('active', on && visible);
+    btn.setAttribute('aria-selected', String(on && visible));
   });
+
   document.querySelectorAll('.auth-panel').forEach((panel) => {
-    panel.classList.toggle('active', panel.id === `panel-${activeTab}`);
+    const panelId = panel.id.replace('panel-', '');
+    const show = panelId === activeTab;
+    panel.classList.toggle('active', show);
   });
+
   window.apiMeter.setAuthTab?.(activeTab);
 }
 
@@ -50,6 +74,7 @@ document.querySelectorAll('.auth-tab').forEach((btn) => {
 window.apiMeter.onAuthPromptInit?.((payload) => {
   titleEl.textContent = payload.title || 'Browser Login';
   descEl.textContent = payload.description || descEl.textContent;
+  configureAuthMode(payload.authMode);
   setStatus(payload.status || 'Waiting for in-app sign-in…', payload.mode || 'waiting');
   if (payload.cookieNameHint && cookieHintEl) {
     cookieHintEl.textContent = `Session cookies: ${payload.cookieNameHint}`;
@@ -57,6 +82,7 @@ window.apiMeter.onAuthPromptInit?.((payload) => {
       cookieNameEl.placeholder = `Only if pasting a single value — e.g. ${payload.cookieNameHint.split(',')[0].trim()}`;
     }
   }
+  setTab(payload.defaultTab || (authMode === 'external' ? 'external' : 'browser'));
 });
 
 window.apiMeter.onAuthPromptStatus?.((payload) => {
@@ -105,12 +131,25 @@ document.getElementById('auth-cancel')?.addEventListener('click', () => {
   window.apiMeter.cancelAuthPrompt();
 });
 
+document.getElementById('auth-cancel-external')?.addEventListener('click', () => {
+  window.apiMeter.cancelAuthPrompt();
+});
+
 document.getElementById('auth-cancel-paste')?.addEventListener('click', () => {
   window.apiMeter.cancelAuthPrompt();
 });
 
 document.getElementById('auth-retry')?.addEventListener('click', () => {
   window.apiMeter.retryAuthPrompt();
+});
+
+document.getElementById('auth-open-external')?.addEventListener('click', () => {
+  window.apiMeter.openExternalAuth?.();
+});
+
+document.getElementById('auth-import-browser')?.addEventListener('click', () => {
+  setStatus('Reading cookies from Chrome/Edge…', 'waiting');
+  window.apiMeter.importBrowserCookies?.();
 });
 
 document.getElementById('auth-import')?.addEventListener('click', submitPaste);

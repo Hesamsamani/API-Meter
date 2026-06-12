@@ -20,6 +20,7 @@ const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batc
 function geminiAuthWindowOptions() {
   return {
     providerId: 'gemini',
+    externalBrowser: true,
     loginUrl: GEMINI_USAGE_PAGE_URL,
     domain: '.google.com',
     cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],

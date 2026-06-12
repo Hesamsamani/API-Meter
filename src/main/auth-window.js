@@ -16,6 +16,8 @@ const {
   formatImportSummary,
 } = require('./cookie-import');
 const { CHROME_UA } = require('../shared/ua');
+const { openChromiumUrl } = require('./open-chromium');
+const { readBrowserCookie, diagnoseBrowserCookie } = require('./browser-cookies');
 
 let activePrompt = null;
 const loginQueues = new Map();
@@ -69,13 +71,20 @@ function createAuthPromptWindow(opts) {
   win.loadFile(path.join(__dirname, '../renderer/auth-prompt/index.html'));
   win.once('ready-to-show', () => {
     win.show();
+    const external = !!opts.externalBrowser;
     sendPrompt('auth-prompt:init', {
       title: opts.title,
-      description: 'Sign in with the in-app browser, or paste cookies copied from your browser.',
-      status: 'Waiting for in-app sign-in…',
+      description: external
+        ? 'Google blocks in-app sign-in. Use Chrome or Edge, then import cookies.'
+        : 'Sign in with the in-app browser, or paste cookies copied from your browser.',
+      status: external
+        ? 'Open Chrome, sign in, then click Import from browser.'
+        : 'Waiting for in-app sign-in…',
       mode: 'waiting',
       cookieNameHint: cookieHint,
       loginUrl: opts.loginUrl,
+      authMode: external ? 'external' : 'embedded',
+      defaultTab: external ? 'external' : 'browser',
     });
   });
 
@@ -97,6 +106,20 @@ function createLoginBrowserWindow(opts) {
     },
   });
   win.webContents.setUserAgent(CHROME_UA);
+  win.webContents.on('did-finish-load', () => {
+    if (win.isDestroyed()) return;
+    const url = win.webContents.getURL();
+    const title = win.webContents.getTitle();
+    const blocked = /accounts\.google\.com/i.test(url)
+      && /couldn'?t sign you in|not be secure/i.test(title);
+    if (blocked) {
+      sendPrompt('auth-prompt:status', {
+        status: 'Google blocked in-app sign-in. Switch to Chrome sign-in or paste cookies.',
+        mode: 'error',
+      });
+      sendPrompt('auth-prompt:google-blocked', {});
+    }
+  });
   win.loadURL(opts.loginUrl);
   win.focus();
   return win;
@@ -194,8 +217,63 @@ async function tryCaptureInAppCookie(opts) {
   return captured;
 }
 
-function waitingMessage() {
-  return 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
+function waitingMessage(external = false) {
+  return external
+    ? 'Sign in in Chrome or Edge, then click Import from browser.'
+    : 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
+}
+
+function browserImportFailureMessage(diag) {
+  switch (diag?.reason) {
+    case 'db_locked':
+      return 'Chrome cookie database is locked — close Chrome completely, or use Paste cookies instead.';
+    case 'v20_encrypted':
+      return 'Chrome uses newer cookie encryption — export with EditThisCookie and use Paste cookies.';
+    case 'not_found':
+      return 'No session cookie found yet — finish sign-in in Chrome, then try again.';
+    default:
+      return 'Could not read cookies from Chrome/Edge — try Paste cookies instead.';
+  }
+}
+
+async function tryImportFromSystemBrowser(session, { quiet = false } = {}) {
+  const hit = readBrowserCookie({
+    ...session.opts,
+    cookieNames: session.opts.cookieNames || [session.opts.cookieName],
+    preferredBrowser: session.preferredBrowser,
+  });
+  if (!hit?.value) {
+    if (!quiet) {
+      const diag = diagnoseBrowserCookie({
+        ...session.opts,
+        cookieNames: session.opts.cookieNames || [session.opts.cookieName],
+        preferredBrowser: session.preferredBrowser,
+      });
+      sendPrompt('auth-prompt:status', {
+        status: browserImportFailureMessage(diag),
+        mode: 'error',
+      });
+    }
+    return null;
+  }
+  await persistCapturedCookies(session.opts, {
+    name: hit.name,
+    value: hit.value,
+    domain: session.opts.domain,
+    browser: hit.browser,
+  });
+  return hit;
+}
+
+async function openExternalLogin(session) {
+  const result = await openChromiumUrl(session.opts.loginUrl);
+  session.preferredBrowser = result.browser === 'default' ? null : result.browser;
+  const label = result.browser === 'default' ? 'your default browser' : result.browser;
+  sendPrompt('auth-prompt:status', {
+    status: `Opened ${label}. Sign in, then click Import from browser.`,
+    mode: 'waiting',
+  });
+  return result;
 }
 
 async function completeLoginWithVerification(session, hit, extra = {}) {
@@ -289,7 +367,10 @@ function registerPromptHandlers(session) {
       closePrompt();
     },
     'auth-prompt:set-tab': (_e, tab) => {
-      session.tab = tab === 'paste' ? 'paste' : 'browser';
+      if (tab === 'paste') session.tab = 'paste';
+      else if (tab === 'external') session.tab = 'external';
+      else session.tab = 'browser';
+
       if (session.tab === 'paste') {
         closeLoginBrowser(session);
         const clip = clipboard.readText();
@@ -303,10 +384,23 @@ function registerPromptHandlers(session) {
         if (hasExport) {
           sendPrompt('auth-prompt:clipboard', { text: clip, detected: true });
         }
+      } else if (session.tab === 'external') {
+        closeLoginBrowser(session);
+        sendPrompt('auth-prompt:status', { status: waitingMessage(true), mode: 'waiting' });
       } else {
         openLoginBrowser(session);
-        sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+        sendPrompt('auth-prompt:status', { status: waitingMessage(false), mode: 'waiting' });
       }
+    },
+    'auth-prompt:open-external': async () => {
+      session.tab = 'external';
+      await openExternalLogin(session);
+    },
+    'auth-prompt:import-browser': async () => {
+      sendPrompt('auth-prompt:status', { status: 'Reading cookies from Chrome/Edge…', mode: 'waiting' });
+      const hit = await tryImportFromSystemBrowser(session);
+      if (!isSessionActive(session) || !hit) return;
+      await completeLoginWithVerification(session, hit);
     },
     'auth-prompt:read-clipboard': () => {
       const text = clipboard.readText();
@@ -364,6 +458,7 @@ function openAuthWindowInner(opts) {
   return new Promise((resolve, reject) => {
     closePrompt();
 
+    const external = !!opts.externalBrowser;
     const session = {
       opts,
       resolve,
@@ -375,36 +470,61 @@ function openAuthWindowInner(opts) {
       ipcIds: [],
       cleaned: false,
       loginWin: null,
-      tab: 'browser',
+      tab: external ? 'external' : 'browser',
+      preferredBrowser: null,
     };
 
     const win = createAuthPromptWindow(opts);
     session.ipcIds = registerPromptHandlers(session);
     activePrompt = { win, session };
 
-    openLoginBrowser(session);
+    if (external) {
+      openExternalLogin(session).catch((err) => {
+        sendPrompt('auth-prompt:status', {
+          status: `Could not open browser: ${err.message || err}`,
+          mode: 'error',
+        });
+      });
+    } else {
+      openLoginBrowser(session);
+    }
 
     if (Notification.isSupported()) {
       new Notification({
         title: opts.title,
-        body: 'Sign in using the API-Meter browser window, or paste cookies.',
+        body: external
+          ? 'Sign in using Chrome or Edge, then import cookies in API-Meter.'
+          : 'Sign in using the API-Meter browser window, or paste cookies.',
       }).show();
     }
 
     const poll = async () => {
-      if (!isSessionActive(session) || session.polling || session.tab !== 'browser') return;
-      session.polling = true;
-      try {
-        const hit = await tryCaptureInAppCookie(opts);
-        if (!isSessionActive(session)) return;
-        if (hit) await completeLoginWithVerification(session, hit);
-      } finally {
-        session.polling = false;
+      if (!isSessionActive(session) || session.polling) return;
+      if (session.tab === 'browser') {
+        session.polling = true;
+        try {
+          const hit = await tryCaptureInAppCookie(opts);
+          if (!isSessionActive(session)) return;
+          if (hit) await completeLoginWithVerification(session, hit);
+        } finally {
+          session.polling = false;
+        }
+        return;
+      }
+      if (session.tab === 'external' && external) {
+        session.polling = true;
+        try {
+          const hit = await tryImportFromSystemBrowser(session, { quiet: true });
+          if (!isSessionActive(session) || !hit) return;
+          await completeLoginWithVerification(session, hit);
+        } finally {
+          session.polling = false;
+        }
       }
     };
 
-    session.timer = setInterval(() => { poll().catch(() => {}); }, 1500);
-    poll().catch(() => {});
+    session.timer = setInterval(() => { poll().catch(() => {}); }, external ? 3000 : 1500);
+    if (!external) poll().catch(() => {});
 
     win.on('closed', () => {
       if (activePrompt?.session === session) activePrompt = null;
@@ -413,7 +533,9 @@ function openAuthWindowInner(opts) {
     setTimeout(() => {
       if (session.cancelled || session.completed || activePrompt?.session !== session) return;
       if (session.tab === 'browser') {
-        sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
+        sendPrompt('auth-prompt:status', { status: waitingMessage(false), mode: 'waiting' });
+      } else if (session.tab === 'external') {
+        sendPrompt('auth-prompt:status', { status: waitingMessage(true), mode: 'waiting' });
       }
     }, 15000);
   });

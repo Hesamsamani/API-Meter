@@ -31,6 +31,7 @@ test('gemini adapter exposes reset that purges google cookies and reopens auth',
   assert.match(geminiSrc, /async reset\(\)/);
   assert.match(geminiSrc, /purgeAllGoogleCookies:\s*true/);
   assert.match(geminiSrc, /loginUrl:\s*GEMINI_USAGE_PAGE_URL/);
+  assert.match(geminiSrc, /externalBrowser:\s*true/);
 });
 
 test('fetchLiveGemini prefers official usage page then batchexecute fallback', () => {
