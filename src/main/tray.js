@@ -18,6 +18,18 @@ const PROVIDER_ORDER = ['claude-ai', 'claude-code', 'gemini', 'perplexity', 'gro
 let tray = null;
 const iconCache = new Map();
 
+function worstUtilAcross(snapshots) {
+  let worst = 0;
+  for (const snap of Object.values(snapshots || {})) {
+    worst = Math.max(worst, worstUtilization(snap));
+  }
+  return worst;
+}
+
+function utilizationBucket(utilization) {
+  return Math.min(100, Math.max(0, Math.round(utilization / 4) * 4));
+}
+
 function assetsDir() {
   return path.join(app.getAppPath(), 'assets');
 }
@@ -50,12 +62,14 @@ function loadIconFromFile(level) {
   return null;
 }
 
-function loadIconFromBuffer(level) {
-  if (iconCache.has(level)) return iconCache.get(level);
+function loadIconFromBuffer(level, utilization = 0) {
+  const bucket = utilizationBucket(utilization);
+  const cacheKey = `${level}:${bucket}`;
+  if (iconCache.has(cacheKey)) return iconCache.get(cacheKey);
 
   const sizes = [16, 32];
-  const primary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[0]));
-  const secondary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[1]));
+  const primary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[0], bucket));
+  const secondary = nativeImage.createFromBuffer(createTrayIconPng(level, sizes[1], bucket));
   if (!primary.isEmpty() && !secondary.isEmpty()) {
     primary.addRepresentation({
       scaleFactor: 2,
@@ -65,17 +79,16 @@ function loadIconFromBuffer(level) {
     });
   }
 
-  iconCache.set(level, primary);
+  iconCache.set(cacheKey, primary);
   return primary;
 }
 
-function createStatusIcon(level) {
+function createStatusIcon(level, utilization = 0) {
+  const fromBuffer = loadIconFromBuffer(level, utilization);
+  if (!fromBuffer.isEmpty()) return fromBuffer;
   const fromFile = loadIconFromFile(level);
-  if (fromFile && !fromFile.isEmpty()) {
-    return fromFile;
-  }
-  const fromBuffer = loadIconFromBuffer(level);
-  return fromBuffer.isEmpty() ? loadIconFromBuffer('green') : fromBuffer;
+  if (fromFile && !fromFile.isEmpty()) return fromFile;
+  return loadIconFromBuffer('green', utilization);
 }
 
 function worstStatusLevel(snapshots, alertSettings) {
@@ -88,12 +101,18 @@ function worstStatusLevel(snapshots, alertSettings) {
   return thresholdColor(worst, warn, danger);
 }
 
-function buildTooltip(snapshots) {
-  const parts = Object.values(snapshots)
+function buildTooltip(snapshots, alertSettings) {
+  const worst = worstUtilAcross(snapshots);
+  const level = worstStatusLevel(snapshots, alertSettings);
+  const statusWord = level === 'red' ? 'Critical' : level === 'amber' ? 'Warning' : 'OK';
+  const parts = Object.values(snapshots || {})
     .sort((a, b) => worstUtilization(b) - worstUtilization(a))
     .slice(0, 3)
     .map((s) => `${PROVIDER_LABELS[s.providerId] || s.providerId} ${worstUtilization(s)}%`);
-  return parts.length ? parts.join(' · ') : 'API-Meter';
+  const detail = parts.length ? parts.join(' · ') : 'No usage data yet';
+  return worst > 0
+    ? `API-Meter · Peak ${worst}% (${statusWord}) · ${detail}`
+    : `API-Meter · ${detail}`;
 }
 
 function buildContextMenu(handlers) {
@@ -158,8 +177,9 @@ function createTray(handlers) {
   return {
     update(snapshots, alertSettings) {
       const level = worstStatusLevel(snapshots, alertSettings);
-      tray.setImage(createStatusIcon(level));
-      tray.setToolTip(buildTooltip(snapshots));
+      const worst = worstUtilAcross(snapshots);
+      tray.setImage(createStatusIcon(level, worst));
+      tray.setToolTip(buildTooltip(snapshots, alertSettings));
     },
     rebuildMenu() {
       tray.setContextMenu(buildContextMenu(handlers));
@@ -167,4 +187,11 @@ function createTray(handlers) {
   };
 }
 
-module.exports = { createTray, buildTooltip, worstStatusLevel, createStatusIcon };
+module.exports = {
+  createTray,
+  buildTooltip,
+  worstStatusLevel,
+  worstUtilAcross,
+  createStatusIcon,
+  utilizationBucket,
+};

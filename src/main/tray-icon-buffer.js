@@ -55,64 +55,205 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
-function drawTrayGauge(rgba, size, rgb) {
-  const w = size;
-  const h = size;
-  const set = (x, y, r, g, b, a = 255) => {
-    const ix = Math.round(x);
-    const iy = Math.round(y);
-    if (ix < 0 || iy < 0 || ix >= w || iy >= h) return;
-    const i = (iy * w + ix) * 4;
-    const af = a / 255;
-    if (af >= 1) {
-      rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
-      return;
-    }
-    const ia = 1 - af;
-    rgba[i] = Math.round(r * af + rgba[i] * ia);
-    rgba[i + 1] = Math.round(g * af + rgba[i + 1] * ia);
-    rgba[i + 2] = Math.round(b * af + rgba[i + 2] * ia);
-    rgba[i + 3] = Math.round(255 * (af + rgba[i + 3] / 255 * ia));
-  };
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
 
-  const fillCircle = (cx, cy, radius, r, g, b, a = 255) => {
-    const r2 = radius * radius;
-    for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
-      for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
-        const dx = x - cx;
-        const dy = y - cy;
-        if (dx * dx + dy * dy <= r2) set(x, y, r, g, b, a);
+function blendPixel(rgba, width, x, y, r, g, b, a = 255) {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  if (ix < 0 || iy < 0 || ix >= width || iy >= width) return;
+  const i = (iy * width + ix) * 4;
+  const af = Math.max(0, Math.min(1, a / 255));
+  if (af >= 0.999) {
+    rgba[i] = r;
+    rgba[i + 1] = g;
+    rgba[i + 2] = b;
+    rgba[i + 3] = 255;
+    return;
+  }
+  const dstA = rgba[i + 3] / 255;
+  const outA = af + dstA * (1 - af);
+  if (outA <= 0) return;
+  rgba[i] = Math.round((r * af + rgba[i] * dstA * (1 - af)) / outA);
+  rgba[i + 1] = Math.round((g * af + rgba[i + 1] * dstA * (1 - af)) / outA);
+  rgba[i + 2] = Math.round((b * af + rgba[i + 2] * dstA * (1 - af)) / outA);
+  rgba[i + 3] = Math.round(outA * 255);
+}
+
+function fillDisc(rgba, width, cx, cy, radius, r, g, b, a = 255) {
+  const rOut = radius + 1;
+  for (let y = Math.floor(cy - rOut); y <= Math.ceil(cy + rOut); y++) {
+    for (let x = Math.floor(cx - rOut); x <= Math.ceil(cx + rOut); x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > radius + 0.5) continue;
+      const cover = smoothstep(radius + 0.6, radius - 0.4, dist);
+      blendPixel(rgba, width, x, y, r, g, b, Math.round(a * cover));
+    }
+  }
+}
+
+function fillRoundedRect(rgba, width, height, x, y, w, h, radius, r, g, b, a = 255) {
+  const clampRadius = Math.min(radius, w / 2, h / 2);
+  for (let py = Math.floor(y); py < Math.ceil(y + h); py++) {
+    for (let px = Math.floor(x); px < Math.ceil(x + w); px++) {
+      let inside = px >= x && px < x + w && py >= y && py < y + h;
+      if (!inside) continue;
+      const corners = [
+        [x + clampRadius, y + clampRadius],
+        [x + w - clampRadius, y + clampRadius],
+        [x + clampRadius, y + h - clampRadius],
+        [x + w - clampRadius, y + h - clampRadius],
+      ];
+      for (const [cx, cy] of corners) {
+        if (
+          (px < x + clampRadius || px >= x + w - clampRadius)
+          && (py < y + clampRadius || py >= y + h - clampRadius)
+        ) {
+          const dx = px + 0.5 - cx;
+          const dy = py + 0.5 - cy;
+          if (dx * dx + dy * dy > clampRadius * clampRadius) {
+            inside = false;
+            break;
+          }
+        }
       }
+      if (inside) blendPixel(rgba, width, px, py, r, g, b, a);
     }
-  };
+  }
+}
 
-  const cx = w / 2;
-  const cy = h / 2;
-  const ringR = size * 0.36;
-  const thickness = Math.max(2.5, size * 0.18);
+function angleFromTopDeg(dx, dy) {
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
 
-  for (let a = 0; a < 270; a++) {
-    const rad0 = ((a - 90) * Math.PI) / 180;
-    const rad1 = ((a - 88) * Math.PI) / 180;
-    const x0 = cx + Math.cos(rad0) * ringR;
-    const y0 = cy + Math.sin(rad0) * ringR;
-    const x1 = cx + Math.cos(rad1) * ringR;
-    const y1 = cy + Math.sin(rad1) * ringR;
-    const steps = 4;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      fillCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, thickness / 2, rgb[0], rgb[1], rgb[2]);
+function normalizeTopClockwise(angleDeg) {
+  return ((angleDeg + 450) % 360);
+}
+
+/**
+ * @param {Buffer} rgba
+ * @param {number} size
+ * @param {{ rgb: number[], utilization?: number, variant?: 'tray'|'app' }} opts
+ */
+function drawMeterIcon(rgba, size, opts) {
+  const rgb = opts.rgb || STATUS_RGB.green;
+  const utilization = Math.max(0, Math.min(100, Number(opts.utilization) || 0));
+  const variant = opts.variant || 'tray';
+  const cx = size / 2;
+  const cy = size / 2;
+
+  if (variant === 'app') {
+    const radius = size * 0.19;
+    fillRoundedRect(rgba, size, size, 0, 0, size, size, radius, 8, 10, 14, 255);
+    const inset = size * 0.07;
+    fillRoundedRect(
+      rgba,
+      size,
+      size,
+      inset,
+      inset,
+      size - inset * 2,
+      size - inset * 2,
+      radius * 0.9,
+      14,
+      16,
+      22,
+      255,
+    );
+    fillRoundedRect(
+      rgba,
+      size,
+      size,
+      inset + 2,
+      inset + 2,
+      size - (inset + 2) * 2,
+      size - (inset + 2) * 2,
+      radius * 0.86,
+      rgb[0],
+      rgb[1],
+      rgb[2],
+      22,
+    );
+  }
+
+  const meterScale = variant === 'app' ? 0.34 : 0.38;
+  const ringR = size * meterScale;
+  const thickness = Math.max(2, size * (variant === 'app' ? 0.075 : 0.17));
+  const fillSweep = Math.max(4, (utilization / 100) * 360);
+  const box = Math.ceil(ringR + thickness + 2);
+
+  for (let y = Math.floor(cy - box); y <= Math.ceil(cy + box); y++) {
+    for (let x = Math.floor(cx - box); x <= Math.ceil(cx + box); x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const dist = Math.hypot(dx, dy);
+      const ringDist = Math.abs(dist - ringR);
+      if (ringDist > thickness * 0.55 + 1.2) continue;
+
+      const cover = smoothstep(thickness * 0.58 + 0.8, thickness * 0.42 - 0.4, ringDist);
+      if (cover <= 0) continue;
+
+      const angle = normalizeTopClockwise(angleFromTopDeg(dx, dy));
+      const onFill = angle <= fillSweep;
+
+      if (onFill) {
+        const glow = 0.82 + 0.18 * Math.sin((angle / 180) * Math.PI);
+        blendPixel(
+          rgba,
+          size,
+          x,
+          y,
+          Math.round(rgb[0] * glow),
+          Math.round(rgb[1] * glow),
+          Math.round(rgb[2] * glow),
+          Math.round(255 * cover),
+        );
+      } else {
+        const trackAlpha = variant === 'app' ? 70 : 52;
+        blendPixel(rgba, size, x, y, 255, 255, 255, Math.round(trackAlpha * cover));
+      }
     }
   }
 
-  fillCircle(cx, cy, Math.max(1.5, size * 0.1), rgb[0], rgb[1], rgb[2]);
+  const hubR = Math.max(1.5, size * (variant === 'app' ? 0.055 : 0.11));
+  fillDisc(rgba, size, cx, cy, hubR * 1.35, rgb[0], rgb[1], rgb[2], 220);
+  fillDisc(rgba, size, cx, cy, hubR * 0.72, 248, 250, 252, 235);
+
+  if (variant === 'app' && size >= 64) {
+    const tickR = ringR + thickness * 0.35;
+    for (let t = 0; t < 12; t++) {
+      const a = ((t / 12) * 360 - 90) * (Math.PI / 180);
+      const tx = cx + Math.cos(a) * tickR;
+      const ty = cy + Math.sin(a) * tickR;
+      fillDisc(rgba, size, tx, ty, Math.max(1, size * 0.008), 255, 255, 255, t % 3 === 0 ? 90 : 45);
+    }
+  }
 }
 
-function createTrayIconPng(level = 'green', size = 16) {
+function createTrayIconPng(level = 'green', size = 16, utilization = 0) {
   const rgb = STATUS_RGB[level] || STATUS_RGB.green;
   const rgba = Buffer.alloc(size * size * 4, 0);
-  drawTrayGauge(rgba, size, rgb);
+  drawMeterIcon(rgba, size, { rgb, utilization, variant: 'tray' });
   return encodePng(size, size, rgba);
 }
 
-module.exports = { createTrayIconPng, STATUS_RGB };
+function createAppIconPng(size = 512, utilization = 38) {
+  const rgba = Buffer.alloc(size * size * 4, 0);
+  drawMeterIcon(rgba, size, {
+    rgb: STATUS_RGB.green,
+    utilization,
+    variant: 'app',
+  });
+  return encodePng(size, size, rgba);
+}
+
+module.exports = {
+  createTrayIconPng,
+  createAppIconPng,
+  drawMeterIcon,
+  STATUS_RGB,
+};
