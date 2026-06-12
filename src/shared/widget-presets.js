@@ -111,6 +111,26 @@ function nextDisplayMode(current) {
   return DISPLAY_MODE_ORDER[(idx + 1) % DISPLAY_MODE_ORDER.length] || 'single';
 }
 
+function normalizeWidgetPosition(pos) {
+  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+  return { x: Math.round(pos.x), y: Math.round(pos.y) };
+}
+
+/**
+ * Keep at least part of the widget visible on a display work area.
+ * @param {{ x: number, y: number, width: number, height: number }} workArea
+ */
+function clampWidgetPosition(x, y, width, height, workArea) {
+  const minX = workArea.x;
+  const minY = workArea.y;
+  const maxX = Math.max(minX, workArea.x + workArea.width - width);
+  const maxY = Math.max(minY, workArea.y + workArea.height - height);
+  return {
+    x: Math.round(Math.min(Math.max(x, minX), maxX)),
+    y: Math.round(Math.min(Math.max(y, minY), maxY)),
+  };
+}
+
 function normalizeWidgetSettings(fw = {}) {
   return {
     enabled: fw.enabled === true,
@@ -121,6 +141,7 @@ function normalizeWidgetSettings(fw = {}) {
     theme: WIDGET_THEMES[fw.theme] ? fw.theme : 'dark',
     opacity: Number.isFinite(fw.opacity) ? Math.min(1, Math.max(0.5, fw.opacity)) : 0.92,
     clickThrough: fw.clickThrough === true,
+    position: normalizeWidgetPosition(fw.position),
   };
 }
 
@@ -244,4 +265,6 @@ module.exports = {
   nextDisplayMode,
   DISPLAY_MODE_ORDER,
   computeWidgetBounds,
+  clampWidgetPosition,
+  normalizeWidgetPosition,
 };

@@ -1,7 +1,11 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
-const { normalizeWidgetSettings, computeWidgetBounds } = require('../shared/widget-presets');
+const {
+  normalizeWidgetSettings,
+  computeWidgetBounds,
+  clampWidgetPosition,
+} = require('../shared/widget-presets');
 
 function preloadPath() {
   return getPreloadPath();
@@ -84,17 +88,61 @@ function createSettingsWindow() {
   return win;
 }
 
+function workAreaForBounds(bounds) {
+  return screen.getDisplayMatchingRect(bounds).workArea;
+}
+
 function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 0) {
   if (!win || win.isDestroyed()) return;
   const fw = normalizeWidgetSettings(fwSettings);
   const { width, height } = computeWidgetBounds(fw, providerCount, orbSlots);
   const bounds = win.getBounds();
-  win.setBounds({
+  const nextWidth = Math.round(width);
+  const nextHeight = Math.round(height);
+  const area = workAreaForBounds({
     x: bounds.x,
     y: bounds.y,
-    width: Math.round(width),
-    height: Math.round(height),
+    width: nextWidth,
+    height: nextHeight,
   });
+  const { x, y } = clampWidgetPosition(bounds.x, bounds.y, nextWidth, nextHeight, area);
+  win.setBounds({ x, y, width: nextWidth, height: nextHeight });
+}
+
+function saveWidgetPosition(win, settingsStore) {
+  if (!win || win.isDestroyed() || !settingsStore) return;
+  const { x, y } = win.getBounds();
+  settingsStore.set('floatingWidget', {
+    ...settingsStore.get('floatingWidget'),
+    position: { x, y },
+  });
+}
+
+function applyWidgetPosition(win, fwSettings) {
+  if (!win || win.isDestroyed()) return;
+  const fw = normalizeWidgetSettings(fwSettings);
+  const { width, height } = win.getBounds();
+  if (fw.position) {
+    const area = workAreaForBounds({ ...fw.position, width, height });
+    const { x, y } = clampWidgetPosition(fw.position.x, fw.position.y, width, height, area);
+    win.setPosition(x, y);
+    return;
+  }
+  positionNearTray(win);
+}
+
+function attachWidgetPositionPersistence(win, settingsStore) {
+  if (!win || win.isDestroyed() || !settingsStore) return;
+  let saveTimer = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      saveWidgetPosition(win, settingsStore);
+    }, 200);
+  };
+  win.on('moved', scheduleSave);
+  win.on('hide', () => saveWidgetPosition(win, settingsStore));
 }
 
 function applyWidgetClickThrough(win, enabled) {
@@ -109,7 +157,7 @@ function applyWidgetClickThrough(win, enabled) {
   }
 }
 
-function createFloatingWidget(fwSettings = {}) {
+function createFloatingWidget(fwSettings = {}, settingsStore = null) {
   const fw = normalizeWidgetSettings(fwSettings);
   const { width, height } = computeWidgetBounds(fw, 1);
   const win = new BrowserWindow({
@@ -129,6 +177,8 @@ function createFloatingWidget(fwSettings = {}) {
   });
   win.loadFile(path.join(__dirname, '../renderer/floating-widget/index.html'));
   applyWidgetClickThrough(win, fw.clickThrough);
+  applyWidgetPosition(win, fw);
+  attachWidgetPositionPersistence(win, settingsStore);
   return win;
 }
 
@@ -197,5 +247,8 @@ module.exports = {
   toggleFloatingWidget,
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
+  applyWidgetPosition,
+  attachWidgetPositionPersistence,
+  saveWidgetPosition,
   positionNearTray,
 };

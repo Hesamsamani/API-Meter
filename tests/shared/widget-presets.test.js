@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeWidgetSettings,
   computeWidgetBounds,
+  clampWidgetPosition,
   nextSize,
   prevSize,
   nextDisplayMode,
@@ -59,6 +60,21 @@ test('computeWidgetBounds empty state respects display mode width', () => {
 test('normalizeWidgetSettings includes clickThrough default false', () => {
   assert.equal(normalizeWidgetSettings({}).clickThrough, false);
   assert.equal(normalizeWidgetSettings({ clickThrough: true }).clickThrough, true);
+});
+
+test('normalizeWidgetSettings preserves saved widget position', () => {
+  assert.equal(normalizeWidgetSettings({}).position, null);
+  assert.deepEqual(
+    normalizeWidgetSettings({ position: { x: 120.4, y: 340.8 } }).position,
+    { x: 120, y: 341 },
+  );
+});
+
+test('clampWidgetPosition keeps widget inside work area', () => {
+  const area = { x: 0, y: 0, width: 1920, height: 1040 };
+  assert.deepEqual(clampWidgetPosition(100, 200, 280, 220, area), { x: 100, y: 200 });
+  assert.deepEqual(clampWidgetPosition(-50, 200, 280, 220, area), { x: 0, y: 200 });
+  assert.deepEqual(clampWidgetPosition(1800, 900, 280, 220, area), { x: 1640, y: 820 });
 });
 
 test('computeWidgetBounds orb mode fits concentric cluster', () => {

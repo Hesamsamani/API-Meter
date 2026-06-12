@@ -187,7 +187,7 @@ function registerIpc() {
     floatingWin = toggleFloatingWidget({
       getWin: () => floatingWin,
       createWin: () => {
-        floatingWin = createFloatingWidget(settings.get('floatingWidget'));
+        floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings);
         return floatingWin;
       },
       settings,
@@ -312,7 +312,7 @@ app.whenReady().then(() => {
       floatingWin = toggleFloatingWidget({
         getWin: () => floatingWin,
         createWin: () => {
-          floatingWin = createFloatingWidget(settings.get('floatingWidget'));
+          floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings);
           return floatingWin;
         },
         settings,
@@ -364,7 +364,7 @@ app.whenReady().then(() => {
   });
 
   if (settings.get('floatingWidget.enabled')) {
-    floatingWin = createFloatingWidget(settings.get('floatingWidget'));
+    floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings);
     floatingWin.show();
   }
 });
