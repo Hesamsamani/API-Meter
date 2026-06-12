@@ -45,5 +45,8 @@ export function formatWindowPercent(win, mode = displayMode) {
 
 export function formatWindowPercentShort(win, mode = displayMode) {
   const pct = Math.round(displayPercent(win?.utilization, mode));
+  if (normalizeUsageDisplayMode(mode) === 'remaining') {
+    return `${win.label} ${pct}% left`;
+  }
   return `${win.label} ${pct}%`;
 }

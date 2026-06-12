@@ -20,6 +20,7 @@ test('orb legends respect usage display mode', () => {
   assert.match(orbSrc, /widget-orb__legend--\$\{layer\}/);
   assert.match(orbSrc, /displayPercent/);
   assert.match(orbSrc, /getUsageDisplayMode/);
+  assert.match(orbSrc, /\$\{mode\}/);
 });
 
 test('orb sizes are larger than old compact layout', () => {

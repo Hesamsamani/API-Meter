@@ -22,8 +22,9 @@ function orbWindows(snap) {
 function orbFingerprint(snap) {
   const needsLogin = isLoginRequired(snap);
   const wins = orbWindows(snap);
-  if (!wins.length) return `${snap?.providerId}|${needsLogin}|${snap?.error || ''}|empty`;
-  return `${snap?.providerId}|${needsLogin}|${snap?.error || ''}|${wins.map((w) => `${w.label}:${w.utilization}`).join(',')}`;
+  const mode = getUsageDisplayMode();
+  if (!wins.length) return `${snap?.providerId}|${needsLogin}|${snap?.error || ''}|${mode}|empty`;
+  return `${snap?.providerId}|${needsLogin}|${snap?.error || ''}|${mode}|${wins.map((w) => `${w.label}:${w.utilization}`).join(',')}`;
 }
 
 function logoHtml(meta, providerId, size) {

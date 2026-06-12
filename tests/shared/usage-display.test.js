@@ -42,4 +42,5 @@ test('formatWindowPercent annotates remaining mode', () => {
   assert.equal(formatWindowPercent(win, 'used'), '5H 25%');
   assert.equal(formatWindowPercent(win, 'remaining'), '5H 75% left');
   assert.equal(formatWindowPercentShort(win, 'used'), '5H 25%');
+  assert.equal(formatWindowPercentShort(win, 'remaining'), '5H 75% left');
 });
