@@ -7,6 +7,7 @@ import { nextSize, prevSize } from '../../src/shared/widget-presets.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const widgetSrc = readFileSync(path.join(root, 'src/renderer/floating-widget/widget.js'), 'utf8');
+const widgetCss = readFileSync(path.join(root, 'src/renderer/shared/styles.css'), 'utf8');
 
 test('widget resize handlers pass provider count to IPC', () => {
   assert.match(widgetSrc, /applyResize\(-1\)/);
@@ -35,6 +36,12 @@ test('widget supports orb mode, layout cycle, and click-through', () => {
   assert.match(widgetSrc, /header\.hidden = cfg\.clickThrough/);
   assert.match(widgetSrc, /contextmenu/);
   assert.match(widgetSrc, /'orb'/);
+});
+
+test('click-through keeps themed panel background visible', () => {
+  const block = widgetCss.match(/\.widget--click-through\s*\{[^}]+\}/)?.[0] || '';
+  assert.doesNotMatch(block, /background:\s*transparent/);
+  assert.doesNotMatch(block, /border-color:\s*transparent/);
 });
 
 test('resize at boundaries does not change size', () => {

@@ -1236,9 +1236,6 @@ body::before {
 }
 
 .widget--click-through {
-  border-color: transparent;
-  box-shadow: none;
-  background: transparent;
   opacity: var(--widget-opacity);
 }
 
@@ -1249,14 +1246,12 @@ body::before {
 }
 
 .widget--click-through .widget-body {
-  padding: 0;
+  padding: 8px;
   -webkit-app-region: no-drag;
 }
 
-.widget--click-through[data-mode="orb"] {
-  box-shadow: none;
-  border: none;
-  border-radius: 0;
+.widget--click-through[data-mode="orb"] .widget-body {
+  padding: 10px 12px 12px;
 }
 
 .widget-click-badge {
