@@ -166,6 +166,12 @@ function widgetWidthForMode(preset, displayMode) {
   return preset.width;
 }
 
+function widgetTopInset(fw, displayMode) {
+  if (fw.clickThrough) return displayMode === 'orb' ? 8 : 0;
+  if (displayMode === 'orb') return ORB_HEADER + 8;
+  return HEADER_HEIGHT;
+}
+
 function computeOrbBounds(fw, providerCount) {
   const orbSize = ORB_SIZE[fw.size] || ORB_SIZE.medium;
   const count = Math.max(1, providerCount);
@@ -177,7 +183,7 @@ function computeOrbBounds(fw, providerCount) {
 
   return {
     width: 16 + cols * clusterWidth + Math.max(0, cols - 1) * ORB_CLUSTER_GAP,
-    height: ORB_HEADER + 8 + rows * rowHeight + Math.max(0, rows - 1) * ORB_CLUSTER_GAP,
+    height: widgetTopInset(fw, 'orb') + rows * rowHeight + Math.max(0, rows - 1) * ORB_CLUSTER_GAP,
   };
 }
 
@@ -185,7 +191,8 @@ function computeWidgetBounds(fw, providerCount = 1, orbSlots = 0) {
   const preset = WIDGET_SIZES[fw.size] || WIDGET_SIZES.medium;
 
   if (providerCount === 0) {
-    const emptyH = fw.displayMode === 'orb' ? ORB_HEADER + 40 : HEADER_HEIGHT + BODY_PADDING + EMPTY_BODY_HEIGHT;
+    const emptyH = widgetTopInset(fw, fw.displayMode)
+      + (fw.displayMode === 'orb' ? 40 : BODY_PADDING + EMPTY_BODY_HEIGHT);
     return {
       width: widgetWidthForMode(preset, fw.displayMode),
       height: emptyH,
@@ -204,23 +211,23 @@ function computeWidgetBounds(fw, providerCount = 1, orbSlots = 0) {
     const rowHeight = GRID_CARD_HEIGHT[fw.size] || GRID_CARD_HEIGHT.medium;
     return {
       width: preset.gridWidth,
-      height: HEADER_HEIGHT + BODY_PADDING + rows * rowHeight + Math.max(0, rows - 1) * GRID_GAP,
+      height: widgetTopInset(fw, 'grid') + BODY_PADDING + rows * rowHeight + Math.max(0, rows - 1) * GRID_GAP,
     };
   }
 
   if (fw.displayMode === 'compact') {
     return {
       width: preset.compactWidth,
-      height: HEADER_HEIGHT + BODY_PADDING + count * COMPACT_ROW_HEIGHT
+      height: widgetTopInset(fw, 'compact') + BODY_PADDING + count * COMPACT_ROW_HEIGHT
         + Math.max(0, count - 1) * COMPACT_GAP + 8,
     };
   }
 
   const cardHeight = SINGLE_CARD_HEIGHT[fw.size] || SINGLE_CARD_HEIGHT.medium;
-  const footer = count > 1 ? SINGLE_FOOTER_MULTI : SINGLE_FOOTER_SINGLE;
+  const footer = fw.clickThrough ? 0 : (count > 1 ? SINGLE_FOOTER_MULTI : SINGLE_FOOTER_SINGLE);
   return {
     width: preset.width,
-    height: HEADER_HEIGHT + BODY_PADDING + cardHeight + footer,
+    height: widgetTopInset(fw, 'single') + BODY_PADDING + cardHeight + footer,
   };
 }
 

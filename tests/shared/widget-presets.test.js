@@ -75,6 +75,15 @@ test('computeWidgetBounds orb scales with provider count', () => {
   assert.ok(three.width >= one.width);
 });
 
+test('computeWidgetBounds shrinks when click-through hides chrome', () => {
+  const normal = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium' });
+  const through = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium', clickThrough: true });
+  const normalBounds = computeWidgetBounds(normal, 1);
+  const throughBounds = computeWidgetBounds(through, 1);
+  assert.ok(throughBounds.height < normalBounds.height);
+  assert.equal(normalBounds.height - throughBounds.height, 30);
+});
+
 test('nextDisplayMode cycles through all layouts', () => {
   let mode = 'single';
   const seen = new Set();

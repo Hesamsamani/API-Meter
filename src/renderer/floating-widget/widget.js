@@ -18,7 +18,6 @@ const root = document.getElementById('widget-root');
 const body = document.getElementById('widget-body');
 const dots = document.getElementById('widget-dots');
 const footer = document.getElementById('widget-footer');
-const clickBadge = document.getElementById('widget-click-badge');
 const ctxMenu = document.getElementById('widget-ctx');
 const ctxClickThrough = document.getElementById('ctx-click-through');
 
@@ -153,11 +152,21 @@ function applyChrome() {
   root.dataset.mode = cfg.displayMode;
   root.classList.toggle('widget--click-through', cfg.clickThrough);
   root.style.setProperty('--widget-opacity', String(cfg.opacity));
-  footer.hidden = cfg.displayMode !== 'single' || activeProviders.length <= 1;
-  if (clickBadge) clickBadge.hidden = !cfg.clickThrough;
+  footer.hidden = cfg.clickThrough || cfg.displayMode !== 'single' || activeProviders.length <= 1;
+
+  const header = root.querySelector('.widget-header');
+  if (header) header.hidden = cfg.clickThrough;
+
   if (ctxClickThrough) {
     ctxClickThrough.textContent = cfg.clickThrough ? 'Disable click-through' : 'Enable click-through';
   }
+
+  const ctxLayout = document.getElementById('ctx-layout');
+  const ctxSettings = document.getElementById('ctx-settings');
+  const ctxClose = document.getElementById('ctx-close');
+  if (ctxLayout) ctxLayout.hidden = cfg.clickThrough;
+  if (ctxClose) ctxClose.hidden = cfg.clickThrough;
+  if (ctxSettings) ctxSettings.hidden = false;
   const layoutBtn = document.getElementById('widget-layout');
   if (layoutBtn) {
     layoutBtn.textContent = MODE_ICONS[cfg.displayMode] || '◎';

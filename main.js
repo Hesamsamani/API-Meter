@@ -208,7 +208,10 @@ function registerIpc() {
     settings.set('floatingWidget', { ...fw, clickThrough: on });
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
-    if (win) applyWidgetClickThrough(win, on);
+    if (win) {
+      applyWidgetClickThrough(win, on);
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), 1);
+    }
     broadcastSettings();
     return on;
   });

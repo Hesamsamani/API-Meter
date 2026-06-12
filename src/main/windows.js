@@ -99,7 +99,14 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 
 
 function applyWidgetClickThrough(win, enabled) {
   if (!win || win.isDestroyed()) return;
-  win.setIgnoreMouseEvents(!!enabled, { forward: true });
+  const on = !!enabled;
+  win.setIgnoreMouseEvents(on, { forward: true });
+  if (on) {
+    // Rainmeter-style: above desktop wallpaper, below normal app windows.
+    win.setAlwaysOnTop(false);
+  } else {
+    win.setAlwaysOnTop(true);
+  }
 }
 
 function createFloatingWidget(fwSettings = {}) {
@@ -174,6 +181,7 @@ function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }
   } else {
     win.show();
     settings.set('floatingWidget.enabled', true);
+    applyWidgetClickThrough(win, settings.get('floatingWidget.clickThrough') === true);
   }
   return win;
 }

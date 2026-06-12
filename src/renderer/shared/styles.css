@@ -1236,23 +1236,31 @@ body::before {
 }
 
 .widget--click-through {
-  outline: 1px dashed rgba(255, 255, 255, 0.12);
-  outline-offset: -2px;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+  opacity: var(--widget-opacity);
 }
 
-.widget[data-theme="light"].widget--click-through {
-  outline-color: rgba(0, 0, 0, 0.12);
+.widget--click-through .widget-header,
+.widget--click-through .widget-footer,
+.widget--click-through .widget-click-badge {
+  display: none !important;
+}
+
+.widget--click-through .widget-body {
+  padding: 0;
+  -webkit-app-region: no-drag;
+}
+
+.widget--click-through[data-mode="orb"] {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
 }
 
 .widget-click-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  font-size: 9px;
-  color: var(--widget-muted);
-  opacity: 0.55;
-  pointer-events: none;
-  -webkit-app-region: no-drag;
+  display: none;
 }
 
 .widget-body--orb {

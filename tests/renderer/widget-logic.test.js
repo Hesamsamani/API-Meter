@@ -32,6 +32,7 @@ test('widget supports orb mode, layout cycle, and click-through', () => {
   assert.match(widgetSrc, /cycleLayout/);
   assert.match(widgetSrc, /cycleWidgetDisplayMode/);
   assert.match(widgetSrc, /setWidgetClickThrough/);
+  assert.match(widgetSrc, /header\.hidden = cfg\.clickThrough/);
   assert.match(widgetSrc, /contextmenu/);
   assert.match(widgetSrc, /'orb'/);
 });
