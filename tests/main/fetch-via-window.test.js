@@ -4,6 +4,7 @@ import {
   parseResponseBody,
   postViaWindow,
   geminiLoadCandidates,
+  waitForGeminiTokens,
 } from '../../src/main/fetch-via-window.js';
 
 test('parseResponseBody parses valid JSON', () => {
@@ -21,6 +22,10 @@ test('geminiLoadCandidates tries root and app paths', () => {
     'https://gemini.google.com/',
     'https://gemini.google.com/app',
   ]);
+});
+
+test('waitForGeminiTokens is exported for gemini quota polling', () => {
+  assert.equal(typeof waitForGeminiTokens, 'function');
 });
 
 test('parseResponseBody rejects cloudflare challenge HTML', () => {

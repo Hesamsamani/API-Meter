@@ -19,6 +19,7 @@ const {
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
   applyWidgetLayerOrder,
+  flushWidgetPosition,
 } = require('./src/main/windows');
 const {
   normalizeWidgetSettings,
@@ -48,10 +49,14 @@ let lastWidgetProviderCount = 1;
 function mergeSettingsPatch(patch = {}) {
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'floatingWidget' && value && typeof value === 'object') {
+      const prev = settings.get('floatingWidget') || {};
       const merged = {
-        ...settings.get('floatingWidget'),
+        ...prev,
         ...value,
       };
+      if (!Object.prototype.hasOwnProperty.call(value, 'position') && prev.position) {
+        merged.position = prev.position;
+      }
       if (Object.prototype.hasOwnProperty.call(value, 'layerOrder')) {
         merged.layerOrder = normalizeLayerOrder(value.layerOrder);
       }
@@ -434,6 +439,12 @@ app.whenReady().then(() => {
 
   if (settings.get('floatingWidget.enabled')) {
     floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings, { autoShow: true });
+  }
+});
+
+app.on('before-quit', () => {
+  if (floatingWin && !floatingWin.isDestroyed()) {
+    flushWidgetPosition(floatingWin, settings);
   }
 });
 

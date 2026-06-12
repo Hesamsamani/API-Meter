@@ -11,6 +11,8 @@ test('settings patch deep-merges floatingWidget instead of replacing it', () => 
   assert.match(mainSrc, /function mergeSettingsPatch/);
   assert.match(mainSrc, /key === 'floatingWidget'/);
   assert.match(mainSrc, /\.\.\.settings\.get\('floatingWidget'\)/);
+  assert.match(mainSrc, /prev\.position/);
+  assert.match(mainSrc, /flushWidgetPosition/);
 });
 
 test('widget bounds handlers use last fit provider count', () => {

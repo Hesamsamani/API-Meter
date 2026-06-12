@@ -215,7 +215,7 @@ async function fetchLiveGemini() {
     GEMINI_ORIGIN,
     `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`,
     buildGeminiQuotaReqBody(),
-    { appendGoogleAtToken: true },
+    { appendGoogleAtToken: true, timeoutMs: 75000 },
   );
   const inner = parseGeminiBatchExecute(raw);
   const quota = extractGeminiQuota(inner);

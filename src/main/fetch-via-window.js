@@ -128,7 +128,7 @@ async function collectGeminiPageSource(win) {
   return win.webContents.executeJavaScript(GEMINI_PAGE_SOURCE_COLLECTOR);
 }
 
-async function waitForGeminiTokens(win, { timeoutMs = 15000, pollMs = 400 } = {}) {
+async function waitForGeminiTokens(win, { timeoutMs = 8000, pollMs = 250 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let last = { at: null, sid: null, bl: null };
   while (Date.now() < deadline) {
@@ -139,6 +139,15 @@ async function waitForGeminiTokens(win, { timeoutMs = 15000, pollMs = 400 } = {}
     await new Promise((r) => setTimeout(r, pollMs));
   }
   return last;
+}
+
+function isGoogleLoginUrl(url) {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'accounts.google.com' || host.endsWith('.accounts.google.com');
+  } catch {
+    return false;
+  }
 }
 
 function postViaWindow(
@@ -153,6 +162,8 @@ function postViaWindow(
     let posting = false;
     let loadIndex = 0;
     const loadUrls = appendGoogleAtToken ? geminiLoadCandidates(originUrl) : [originUrl];
+    const tokenWaitPerUrlMs = appendGoogleAtToken ? 8000 : 0;
+    const startedAt = Date.now();
 
     const finish = (fn, value) => {
       if (settled) return;
@@ -162,21 +173,37 @@ function postViaWindow(
       fn(value);
     };
 
-    const timeout = setTimeout(() => finish(reject, new Error('Request timeout')), timeoutMs);
+    let timeout = null;
+    const armTimeout = () => {
+      if (timeout) clearTimeout(timeout);
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(5000, timeoutMs - elapsed);
+      timeout = setTimeout(() => finish(reject, new Error('Request timeout')), remaining);
+    };
+    armTimeout();
 
     const runPost = async () => {
       if (posting || settled || win.isDestroyed() || win.webContents.isLoading()) return;
       const currentUrl = win.webContents.getURL();
+      if (isGoogleLoginUrl(currentUrl)) {
+        finish(reject, new Error('Gemini session expired — use Re-login'));
+        return;
+      }
       if (!urlLooksReady(currentUrl, originUrl)) return;
 
       posting = true;
+      armTimeout();
       try {
         let tokens = { at: null, sid: null, bl: null };
         if (appendGoogleAtToken) {
-          tokens = await waitForGeminiTokens(win, { timeoutMs: Math.min(15000, timeoutMs - 2000) });
+          const elapsed = Date.now() - startedAt;
+          const budget = Math.max(2000, timeoutMs - elapsed - 5000);
+          const perUrl = Math.min(tokenWaitPerUrlMs, Math.floor(budget / Math.max(1, loadUrls.length - loadIndex)));
+          tokens = await waitForGeminiTokens(win, { timeoutMs: perUrl });
           if (!tokens.at && loadIndex < loadUrls.length - 1) {
             posting = false;
             loadIndex += 1;
+            armTimeout();
             win.loadURL(loadUrls[loadIndex]);
             return;
           }

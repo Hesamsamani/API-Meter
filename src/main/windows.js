@@ -148,18 +148,34 @@ function applyWidgetPosition(win, fwSettings) {
   positionNearTray(win);
 }
 
+function flushWidgetPosition(win, settingsStore) {
+  if (!win || win.isDestroyed() || !settingsStore) return;
+  if (typeof win.__flushWidgetPosition === 'function') {
+    win.__flushWidgetPosition();
+    return;
+  }
+  saveWidgetPosition(win, settingsStore);
+}
+
 function attachWidgetPositionPersistence(win, settingsStore) {
   if (!win || win.isDestroyed() || !settingsStore) return;
   let saveTimer = null;
+  const flushSave = () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    saveWidgetPosition(win, settingsStore);
+  };
   const scheduleSave = () => {
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      saveWidgetPosition(win, settingsStore);
-    }, 200);
+    saveTimer = setTimeout(flushSave, 200);
   };
+  win.__flushWidgetPosition = flushSave;
   win.on('moved', scheduleSave);
-  win.on('hide', () => saveWidgetPosition(win, settingsStore));
+  win.on('resized', scheduleSave);
+  win.on('hide', flushSave);
+  win.on('close', flushSave);
 }
 
 /**
@@ -361,6 +377,7 @@ module.exports = {
   applyWidgetPosition,
   attachWidgetPositionPersistence,
   saveWidgetPosition,
+  flushWidgetPosition,
   positionNearTray,
   resolveFloatingWidgetWindow,
 };

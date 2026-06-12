@@ -33,3 +33,9 @@ test('floating widget applies configurable layer order on show', () => {
   assert.match(windowsSrc, /layerOrder/);
   assert.match(windowsSrc, /win\.on\('show'/);
 });
+
+test('floating widget persists position on hide close and flush', () => {
+  assert.match(windowsSrc, /flushWidgetPosition/);
+  assert.match(windowsSrc, /win\.on\('close'/);
+  assert.match(windowsSrc, /saveWidgetPosition/);
+});

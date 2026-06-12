@@ -171,6 +171,9 @@ async function init() {
         ...patch.floatingWidget,
         enabled: live.floatingWidget?.enabled ?? false,
       };
+      if (live.floatingWidget?.position) {
+        patch.floatingWidget.position = live.floatingWidget.position;
+      }
       current = await window.apiMeter.updateSettings(patch);
       formDirty = false;
       populateForm(current);

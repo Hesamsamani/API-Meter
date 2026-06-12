@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   parseGeminiBatchExecute,
   extractGeminiQuota,
@@ -7,7 +10,16 @@ import {
   inferGeminiPlan,
   GEMINI_QUOTA_BATCH_URL,
 } from '../../src/providers/gemini.js';
+
+const geminiSrc = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../../src/providers/gemini.js'),
+  'utf8',
+);
 import { extractGeminiPageTokens } from '../../src/shared/gemini-page-tokens.js';
+
+test('fetchLiveGemini uses extended postViaWindow timeout', () => {
+  assert.match(geminiSrc, /timeoutMs:\s*75000/);
+});
 
 test('buildGeminiQuotaReqBody encodes otAQ7b batchexecute payload', () => {
   const body = buildGeminiQuotaReqBody();
