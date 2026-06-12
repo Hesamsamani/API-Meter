@@ -5,6 +5,7 @@ import {
   postViaWindow,
   geminiLoadCandidates,
   waitForGeminiTokens,
+  GEMINI_USAGE_PAGE_URL,
 } from '../../src/main/fetch-via-window.js';
 
 test('parseResponseBody parses valid JSON', () => {
@@ -16,12 +17,11 @@ test('postViaWindow is exported', () => {
   assert.equal(typeof postViaWindow, 'function');
 });
 
-test('geminiLoadCandidates tries root and app paths', () => {
+test('geminiLoadCandidates prioritizes official usage page', () => {
   const urls = geminiLoadCandidates('https://gemini.google.com/');
-  assert.deepEqual(urls, [
-    'https://gemini.google.com/',
-    'https://gemini.google.com/app',
-  ]);
+  assert.equal(urls[0], GEMINI_USAGE_PAGE_URL);
+  assert.ok(urls.includes('https://gemini.google.com/usage?pageId=none'));
+  assert.ok(urls.includes('https://gemini.google.com/app'));
 });
 
 test('waitForGeminiTokens is exported for gemini quota polling', () => {

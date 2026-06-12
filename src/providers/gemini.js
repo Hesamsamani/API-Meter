@@ -2,14 +2,23 @@ const fs = require('fs');
 const path = require('path');
 const { geminiTmpPath } = require('../shared/paths');
 const { clampPercent } = require('../shared/normalize');
-const { postViaWindow } = require('../main/fetch-via-window');
+const { postViaWindow, fetchGeminiUsagePage } = require('../main/fetch-via-window');
+const {
+  GEMINI_USAGE_PAGE_URL,
+  parseGeminiUsagePageSource,
+  mapUsagePageToSnapshot,
+} = require('../shared/gemini-usage-page');
 const { openAuthWindow } = require('../main/auth-window');
 const { getSecret } = require('../main/store');
 
 const AI_PRO_DAILY_LIMIT = 1000;
 const GEMINI_POST_TIMEOUT_MS = 75000;
 const GEMINI_ORIGIN = 'https://gemini.google.com/';
-const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b&rt=c';
+const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b&rt=c&source-path=%2Fusage';
+
+function buildGeminiQuotaBatchUrl() {
+  return `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`;
+}
 
 function buildGeminiQuotaReqBody() {
   const fReq = JSON.stringify([[['otAQ7b', '[]', null, 'generic']]]);
@@ -190,7 +199,7 @@ function extractGeminiQuota(inner) {
   return walk(inner) || {};
 }
 
-async function fetchLiveGemini() {
+async function prepareGeminiSession() {
   const { getProviderSession, setCookies, flushCookies, syncElectronCookiesToPartition } = require('../main/provider-session');
   const sid = getSecret('gemini-session');
   if (!sid) throw new Error('Gemini login required');
@@ -208,14 +217,34 @@ async function fetchLiveGemini() {
     },
   ]);
   await syncElectronCookiesToPartition({
-    loginUrl: 'https://gemini.google.com/',
+    loginUrl: GEMINI_USAGE_PAGE_URL,
     domain: '.google.com',
     cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
   });
   await flushCookies(ses);
+}
+
+async function fetchGeminiFromUsagePage() {
+  const pagePayload = await fetchGeminiUsagePage({ timeoutMs: GEMINI_POST_TIMEOUT_MS });
+  const parsed = parseGeminiUsagePageSource(pagePayload);
+  const mapped = mapUsagePageToSnapshot(parsed.windows);
+  if (!mapped?.windows?.length) {
+    throw new Error('Gemini usage page: quota data not found');
+  }
+  const primary = parsed.windows.find((w) => w.key === 'pro') || parsed.windows[0];
+  return {
+    providerId: 'gemini',
+    source: 'live',
+    plan: inferGeminiPlan({ dayLimit: primary?.limit, tier: primary?.label }),
+    windows: mapped.windows,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchGeminiFromBatchExecute() {
   const raw = await postViaWindow(
-    GEMINI_ORIGIN,
-    `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`,
+    GEMINI_USAGE_PAGE_URL,
+    buildGeminiQuotaBatchUrl(),
     buildGeminiQuotaReqBody(),
     { appendGoogleAtToken: true, timeoutMs: GEMINI_POST_TIMEOUT_MS },
   );
@@ -232,13 +261,29 @@ async function fetchLiveGemini() {
     source: 'live',
     plan: inferGeminiPlan(normalized),
     windows: [{
-      key: 'day',
-      label: 'DAY',
+      key: 'pro',
+      label: 'PRO',
       utilization: clampPercent((dayUsed / dayLimit) * 100),
       resetsAt: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString(),
     }],
     fetchedAt: new Date().toISOString(),
   };
+}
+
+async function fetchLiveGemini() {
+  await prepareGeminiSession();
+  let pageErr = null;
+  try {
+    return await fetchGeminiFromUsagePage();
+  } catch (err) {
+    pageErr = err;
+  }
+  try {
+    return await fetchGeminiFromBatchExecute();
+  } catch (batchErr) {
+    const detail = pageErr ? `${pageErr.message}; ${batchErr.message}` : batchErr.message;
+    throw new Error(detail);
+  }
 }
 
 function createGeminiAdapter() {
@@ -302,5 +347,9 @@ module.exports = {
   mapLocalGemini,
   buildGeminiQuotaReqBody,
   GEMINI_QUOTA_BATCH_URL,
+  GEMINI_USAGE_PAGE_URL,
   GEMINI_POST_TIMEOUT_MS,
+  buildGeminiQuotaBatchUrl,
+  fetchGeminiFromUsagePage,
+  fetchGeminiFromBatchExecute,
 };

@@ -10,6 +10,8 @@ import {
   inferGeminiPlan,
   GEMINI_QUOTA_BATCH_URL,
   GEMINI_POST_TIMEOUT_MS,
+  GEMINI_USAGE_PAGE_URL,
+  buildGeminiQuotaBatchUrl,
 } from '../../src/providers/gemini.js';
 
 const geminiSrc = readFileSync(
@@ -21,6 +23,13 @@ import { extractGeminiPageTokens } from '../../src/shared/gemini-page-tokens.js'
 test('fetchLiveGemini uses shared GEMINI_POST_TIMEOUT_MS', () => {
   assert.equal(GEMINI_POST_TIMEOUT_MS, 75000);
   assert.match(geminiSrc, /timeoutMs:\s*GEMINI_POST_TIMEOUT_MS/);
+});
+
+test('fetchLiveGemini prefers official usage page then batchexecute fallback', () => {
+  assert.equal(GEMINI_USAGE_PAGE_URL, 'https://gemini.google.com/usage?pageId=none');
+  assert.match(geminiSrc, /fetchGeminiFromUsagePage/);
+  assert.match(geminiSrc, /fetchGeminiFromBatchExecute/);
+  assert.match(buildGeminiQuotaBatchUrl(), /source-path=%2Fusage/);
 });
 
 test('extractGeminiQuota rejects implausible numeric pairs', () => {

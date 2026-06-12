@@ -7,6 +7,10 @@ const {
   extractGeminiPageTokens,
   GEMINI_PAGE_SOURCE_COLLECTOR,
 } = require('../shared/gemini-page-tokens');
+const {
+  GEMINI_USAGE_PAGE_URL,
+  GEMINI_USAGE_PAGE_COLLECTOR,
+} = require('../shared/gemini-usage-page');
 const { PARTITION } = require('./provider-session');
 
 const BLOCKED_SIGNATURES = [
@@ -120,7 +124,13 @@ function fetchViaWindow(url, { timeoutMs = 30000, expectJson = true, partition =
  */
 function geminiLoadCandidates(originUrl) {
   const base = originUrl.replace(/\/?$/, '');
-  return [...new Set([`${base}/`, `${base}/app`, originUrl])];
+  return [...new Set([
+    GEMINI_USAGE_PAGE_URL,
+    `${base}/usage?pageId=none`,
+    `${base}/`,
+    `${base}/app`,
+    originUrl,
+  ])];
 }
 
 async function collectGeminiPageSource(win) {
@@ -325,13 +335,79 @@ function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, pa
   });
 }
 
+/**
+ * Load the official Gemini /usage page and collect quota UI data.
+ * @param {{ timeoutMs?: number, partition?: string, pollMs?: number }} [options]
+ */
+function fetchGeminiUsagePage({ timeoutMs = 75000, partition = PARTITION, pollMs = 400 } = {}) {
+  return new Promise((resolve, reject) => {
+    const win = createFetchWindow({ partition });
+    const url = GEMINI_USAGE_PAGE_URL;
+    let settled = false;
+    const startedAt = Date.now();
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (!win.isDestroyed()) win.close();
+      fn(value);
+    };
+
+    let timer = null;
+    const armTimeout = () => {
+      if (timer) clearTimeout(timer);
+      const remaining = Math.max(5000, timeoutMs - (Date.now() - startedAt));
+      timer = setTimeout(() => finish(reject, new Error('Request timeout')), remaining);
+    };
+    armTimeout();
+
+    const collect = async () => {
+      if (settled || win.isDestroyed() || win.webContents.isLoading()) return;
+      const currentUrl = win.webContents.getURL();
+      if (isGoogleLoginUrl(currentUrl)) {
+        finish(reject, new Error('Gemini session expired — use Re-login'));
+        return;
+      }
+      if (!urlLooksReady(currentUrl, url)) return;
+
+      armTimeout();
+      const deadline = Date.now() + Math.min(15000, Math.max(3000, timeoutMs - (Date.now() - startedAt) - 5000));
+      let last = null;
+      while (Date.now() < deadline && !win.isDestroyed()) {
+        last = await win.webContents.executeJavaScript(GEMINI_USAGE_PAGE_COLLECTOR);
+        if (last?.buckets?.length) {
+          finish(resolve, last);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, pollMs));
+      }
+      if (last) {
+        finish(resolve, last);
+        return;
+      }
+      finish(reject, new Error('Gemini usage page did not load'));
+    };
+
+    win.webContents.on('did-stop-loading', () => { collect().catch((err) => finish(reject, err)); });
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || BENIGN_FAIL_CODES.has(errorCode)) return;
+      finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
+    });
+
+    win.loadURL(url);
+  });
+}
+
 module.exports = {
   fetchViaWindow,
   postViaWindow,
   fetchMultipleViaWindow,
+  fetchGeminiUsagePage,
   parseResponseBody,
   createFetchWindow,
   collectGeminiPageSource,
   waitForGeminiTokens,
   geminiLoadCandidates,
+  GEMINI_USAGE_PAGE_URL,
 };
