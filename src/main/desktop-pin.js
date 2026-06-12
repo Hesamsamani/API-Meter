@@ -166,8 +166,40 @@ function pinWidgetToDesktop(win) {
   }
 }
 
+/**
+ * Detach widget from WorkerW and restore as a top-level window.
+ * @param {import('electron').BrowserWindow} win
+ * @returns {boolean}
+ */
+function unpinWidgetFromDesktop(win) {
+  try {
+    const user32 = loadApi();
+    if (!user32 || !win || win.isDestroyed()) return false;
+    const hwnd = hwndFromWindow(win);
+    if (!hwnd) return false;
+    user32.SetParent(asHwnd(hwnd), null);
+    const bounds = win.getBounds();
+    user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+    user32.SetWindowPos(
+      asHwnd(hwnd),
+      asHwnd(HWND_TOP),
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      SWP_SHOWWINDOW | SWP_NOACTIVATE,
+    );
+    win.setBounds(bounds);
+    return true;
+  } catch (err) {
+    console.error('desktop-pin: failed to unpin widget', err);
+    return false;
+  }
+}
+
 module.exports = {
   isDesktopPinSupported,
   pinWidgetToDesktop,
+  unpinWidgetFromDesktop,
   findDesktopWorkerW,
 };

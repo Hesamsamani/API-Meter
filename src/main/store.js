@@ -17,6 +17,7 @@ const settings = new Store({
       theme: 'dark',
       opacity: 0.92,
       clickThrough: false,
+      layerOrder: 'always-on-top',
       position: null,
     },
     alerts: { enabled: true, warnThreshold: 75, dangerThreshold: 90 },

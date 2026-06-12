@@ -43,10 +43,22 @@ function mapLocalGemini(sessionsToday) {
   };
 }
 
-function parseGeminiBatchExecute(bodyText) {
-  const cleaned = String(bodyText || '').replace(/^\)\]\}'\s*/, '').trim();
-  const outer = JSON.parse(cleaned);
-  if (!Array.isArray(outer)) throw new Error('Gemini batchexecute: unexpected payload');
+function stripGeminiBatchPrefix(bodyText) {
+  return String(bodyText || '').replace(/^\)\]\}'\s*/, '').trim();
+}
+
+function geminiBatchJsonCandidates(bodyText) {
+  const text = stripGeminiBatchPrefix(bodyText);
+  if (!text) return [];
+
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const candidates = lines.filter((line) => !/^\d+$/.test(line) && (line.startsWith('[') || line.startsWith('{')));
+  if (candidates.length) return candidates;
+  return [text];
+}
+
+function parseGeminiBatchRows(outer) {
+  if (!Array.isArray(outer)) return null;
 
   for (const row of outer) {
     if (!Array.isArray(row) || row.length < 3) continue;
@@ -60,6 +72,24 @@ function parseGeminiBatchExecute(bodyText) {
       /* try next row */
     }
   }
+  return null;
+}
+
+function parseGeminiBatchExecute(bodyText) {
+  const candidates = geminiBatchJsonCandidates(bodyText);
+  let lastErr = null;
+
+  for (const jsonLine of candidates) {
+    try {
+      const outer = JSON.parse(jsonLine);
+      const parsed = parseGeminiBatchRows(outer);
+      if (parsed) return parsed;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  if (lastErr) throw lastErr;
   throw new Error('Gemini batchexecute: quota data not found');
 }
 

@@ -1,7 +1,7 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
-const { pinWidgetToDesktop } = require('./desktop-pin');
+const { pinWidgetToDesktop, unpinWidgetFromDesktop } = require('./desktop-pin');
 const {
   normalizeWidgetSettings,
   computeWidgetBounds,
@@ -108,7 +108,7 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 
   });
   const { x, y } = clampWidgetPosition(bounds.x, bounds.y, nextWidth, nextHeight, area);
   win.setBounds({ x, y, width: nextWidth, height: nextHeight });
-  applyWidgetDesktopLayer(win);
+  applyWidgetLayerOrder(win, fw.layerOrder);
 }
 
 function saveWidgetPosition(win, settingsStore) {
@@ -147,16 +147,33 @@ function attachWidgetPositionPersistence(win, settingsStore) {
   win.on('hide', () => saveWidgetPosition(win, settingsStore));
 }
 
-function applyWidgetDesktopLayer(win) {
+function applyWidgetLayerOrder(win, layerOrder = 'always-on-top') {
   if (!win || win.isDestroyed()) return;
-  pinWidgetToDesktop(win);
+  const fw = normalizeWidgetSettings({ layerOrder });
+  const bounds = win.getBounds();
+
+  if (fw.layerOrder === 'desktop') {
+    if (pinWidgetToDesktop(win)) return;
+    unpinWidgetFromDesktop(win);
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.setBounds(bounds);
+    return;
+  }
+
+  unpinWidgetFromDesktop(win);
+  if (fw.layerOrder === 'always-on-top') {
+    win.setAlwaysOnTop(true, 'screen-saver');
+  } else {
+    win.setAlwaysOnTop(false);
+  }
+  win.setBounds(bounds);
 }
 
-function applyWidgetClickThrough(win, enabled) {
+function applyWidgetClickThrough(win, enabled, layerOrder = 'always-on-top') {
   if (!win || win.isDestroyed()) return;
   const on = !!enabled;
   win.setIgnoreMouseEvents(on, { forward: true });
-  applyWidgetDesktopLayer(win);
+  applyWidgetLayerOrder(win, layerOrder);
 }
 
 function createFloatingWidget(fwSettings = {}, settingsStore = null) {
@@ -179,10 +196,15 @@ function createFloatingWidget(fwSettings = {}, settingsStore = null) {
   });
   win.loadFile(path.join(__dirname, '../renderer/floating-widget/index.html'));
   win.once('ready-to-show', () => {
-    applyWidgetClickThrough(win, fw.clickThrough);
+    applyWidgetClickThrough(win, fw.clickThrough, fw.layerOrder);
     applyWidgetPosition(win, fw);
   });
-  win.on('show', () => applyWidgetDesktopLayer(win));
+  win.on('show', () => {
+    const current = settingsStore
+      ? normalizeWidgetSettings(settingsStore.get('floatingWidget'))
+      : fw;
+    applyWidgetLayerOrder(win, current.layerOrder);
+  });
   attachWidgetPositionPersistence(win, settingsStore);
   return win;
 }
@@ -234,9 +256,10 @@ function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }
     win.hide();
     settings.set('floatingWidget.enabled', false);
   } else {
-    applyWidgetClickThrough(win, settings.get('floatingWidget.clickThrough') === true);
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    applyWidgetClickThrough(win, fw.clickThrough, fw.layerOrder);
     win.show();
-    applyWidgetDesktopLayer(win);
+    applyWidgetLayerOrder(win, fw.layerOrder);
     settings.set('floatingWidget.enabled', true);
   }
   return win;
@@ -253,7 +276,7 @@ module.exports = {
   toggleFloatingWidget,
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
-  applyWidgetDesktopLayer,
+  applyWidgetLayerOrder,
   applyWidgetPosition,
   attachWidgetPositionPersistence,
   saveWidgetPosition,

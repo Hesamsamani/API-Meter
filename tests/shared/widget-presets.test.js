@@ -62,6 +62,12 @@ test('normalizeWidgetSettings includes clickThrough default false', () => {
   assert.equal(normalizeWidgetSettings({ clickThrough: true }).clickThrough, true);
 });
 
+test('normalizeWidgetSettings defaults layerOrder to always-on-top', () => {
+  assert.equal(normalizeWidgetSettings({}).layerOrder, 'always-on-top');
+  assert.equal(normalizeWidgetSettings({ layerOrder: 'desktop' }).layerOrder, 'desktop');
+  assert.equal(normalizeWidgetSettings({ layerOrder: 'bogus' }).layerOrder, 'always-on-top');
+});
+
 test('normalizeWidgetSettings preserves saved widget position', () => {
   assert.equal(normalizeWidgetSettings({}).position, null);
   assert.deepEqual(

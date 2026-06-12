@@ -22,9 +22,10 @@ test('desktop-pin uses WorkerW spawn and SetParent', () => {
   assert.match(pinSrc, /ScreenToClient/);
 });
 
-test('floating widget is pinned on show and click-through changes', () => {
+test('floating widget applies configurable layer order on show', () => {
   assert.match(windowsSrc, /pinWidgetToDesktop/);
-  assert.match(windowsSrc, /applyWidgetDesktopLayer/);
-  assert.match(windowsSrc, /win\.on\('show', \(\) => applyWidgetDesktopLayer/);
-  assert.doesNotMatch(windowsSrc, /setAlwaysOnTop\(true\)/);
+  assert.match(windowsSrc, /unpinWidgetFromDesktop/);
+  assert.match(windowsSrc, /applyWidgetLayerOrder/);
+  assert.match(windowsSrc, /layerOrder/);
+  assert.match(windowsSrc, /win\.on\('show'/);
 });

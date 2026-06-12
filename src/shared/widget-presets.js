@@ -106,6 +106,18 @@ const SIZE_ORDER = ['small', 'medium', 'large'];
 const THEME_ORDER = ['dark', 'midnight', 'glass', 'light', 'minimal'];
 const DISPLAY_MODE_ORDER = ['single', 'grid', 'compact', 'orb'];
 
+const WIDGET_LAYER_ORDERS = {
+  'always-on-top': { key: 'always-on-top', label: 'Always on top' },
+  desktop: { key: 'desktop', label: 'Desktop layer (survives Win+D)' },
+  normal: { key: 'normal', label: 'Normal (behind other windows)' },
+};
+
+const LAYER_ORDER_VALUES = Object.keys(WIDGET_LAYER_ORDERS);
+
+function normalizeLayerOrder(value) {
+  return WIDGET_LAYER_ORDERS[value] ? value : 'always-on-top';
+}
+
 function nextDisplayMode(current) {
   const idx = DISPLAY_MODE_ORDER.indexOf(current);
   return DISPLAY_MODE_ORDER[(idx + 1) % DISPLAY_MODE_ORDER.length] || 'single';
@@ -141,6 +153,7 @@ function normalizeWidgetSettings(fw = {}) {
     theme: WIDGET_THEMES[fw.theme] ? fw.theme : 'dark',
     opacity: Number.isFinite(fw.opacity) ? Math.min(1, Math.max(0.5, fw.opacity)) : 0.92,
     clickThrough: fw.clickThrough === true,
+    layerOrder: normalizeLayerOrder(fw.layerOrder),
     position: normalizeWidgetPosition(fw.position),
   };
 }
@@ -256,8 +269,11 @@ module.exports = {
   WIDGET_SIZES,
   WIDGET_THEMES,
   WIDGET_DISPLAY_MODES,
+  WIDGET_LAYER_ORDERS,
+  LAYER_ORDER_VALUES,
   SIZE_ORDER,
   THEME_ORDER,
+  normalizeLayerOrder,
   normalizeWidgetSettings,
   nextSize,
   prevSize,

@@ -76,6 +76,15 @@
             <option value="orb">Orbs (minimal)</option>
           </select>
         </label>
+        <label class="field-row">
+          <span>Draw order</span>
+          <select id="widget-layer-order">
+            <option value="always-on-top">Always on top (recommended)</option>
+            <option value="desktop">Desktop layer (survives Win+D)</option>
+            <option value="normal">Normal (behind other windows)</option>
+          </select>
+        </label>
+        <p class="field-hint">Always on top keeps the widget visible above apps. Desktop layer pins behind windows and survives Show Desktop — use if the widget disappears.</p>
         <label class="field-check">
           <input type="checkbox" id="widget-click-through">
           <span>Click-through mode (Rainmeter-style — right-click widget to toggle)</span>
@@ -106,7 +115,7 @@
           <input type="checkbox" id="widget-auto-rotate">
           <span>Auto-rotate (single mode, 10s)</span>
         </label>
-        <p class="field-hint">Widget stays on the Windows desktop layer (survives Win+D / Show desktop). Pin providers for grid/list/orb modes. Right-click for click-through. Use −/+ and ◐ for quick resize/theme.</p>
+        <p class="field-hint">Pin providers for grid/list/orb modes. Right-click for click-through. Use −/+ and ◐ for quick resize/theme.</p>
         <div class="widget-pin-grid" id="widget-pin-grid"></div>
       </section>
 

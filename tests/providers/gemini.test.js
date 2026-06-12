@@ -24,3 +24,13 @@ test('parseGeminiBatchExecute strips XSS prefix and parses nested JSON', () => {
   assert.equal(quota.dayUsed, 12);
   assert.equal(quota.dayLimit, 1000);
 });
+
+test('parseGeminiBatchExecute skips Google length-prefixed batchexecute lines', () => {
+  const inner = { dayUsed: 42, dayLimit: 1000 };
+  const json = `[["wrb.fr","otAQ7b",${JSON.stringify(JSON.stringify(inner))},null,null]]`;
+  const body = `)]}'\n\n${json.length}\n${json}`;
+  const parsed = parseGeminiBatchExecute(body);
+  const quota = extractGeminiQuota(parsed);
+  assert.equal(quota.dayUsed, 42);
+  assert.equal(quota.dayLimit, 1000);
+});

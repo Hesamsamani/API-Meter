@@ -18,6 +18,7 @@ const {
   toggleFloatingWidget,
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
+  applyWidgetLayerOrder,
 } = require('./src/main/windows');
 const {
   normalizeWidgetSettings,
@@ -106,9 +107,12 @@ function applySettingsPatch(patch) {
     }
   }
   if (patch.floatingWidget && floatingWin && !floatingWin.isDestroyed()) {
-    const fw = settings.get('floatingWidget');
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
     if (Object.prototype.hasOwnProperty.call(patch.floatingWidget, 'clickThrough')) {
-      applyWidgetClickThrough(floatingWin, fw.clickThrough);
+      applyWidgetClickThrough(floatingWin, fw.clickThrough, fw.layerOrder);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch.floatingWidget, 'layerOrder')) {
+      applyWidgetLayerOrder(floatingWin, fw.layerOrder);
     }
     if (floatingWin.isVisible()) {
       applyWidgetWindowBounds(floatingWin, fw, widgetProviderCountForBounds());
@@ -239,8 +243,9 @@ function registerIpc() {
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
     if (win) {
-      applyWidgetClickThrough(win, on);
-      applyWidgetWindowBounds(win, settings.get('floatingWidget'), count);
+      const fwNow = normalizeWidgetSettings(settings.get('floatingWidget'));
+      applyWidgetClickThrough(win, on, fwNow.layerOrder);
+      applyWidgetWindowBounds(win, fwNow, count);
     }
     broadcastSettings();
     return on;
