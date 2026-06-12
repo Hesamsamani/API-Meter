@@ -7,25 +7,52 @@
   <title>Sign In</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
+    html, body { height: 100%; overflow: hidden; }
+
     .auth-shell {
       height: 100%;
       display: flex;
       flex-direction: column;
-      padding: 18px 20px 16px;
-      gap: 12px;
       overflow: hidden;
     }
-    .auth-shell h1 {
+
+    .auth-head {
+      flex-shrink: 0;
+      padding: 16px 18px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 10, 11, 0.96);
+    }
+
+    .auth-head h1 {
       font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .auth-shell > p {
+
+    .auth-head > p {
       font-size: 11px;
       line-height: 1.5;
       color: var(--muted);
     }
+
+    .auth-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px 18px 8px;
+    }
+
+    .auth-footer {
+      flex-shrink: 0;
+      padding: 10px 18px 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(10, 10, 11, 0.98);
+    }
+
     .auth-tabs {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -35,6 +62,7 @@
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.02);
     }
+
     .auth-tab {
       border: none;
       border-radius: 7px;
@@ -49,18 +77,21 @@
       cursor: pointer;
       transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     }
+
     .auth-tab.active {
       color: var(--text);
       background: rgba(255, 255, 255, 0.06);
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
-    .auth-panel { display: none; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+
+    .auth-panel { display: none; flex-direction: column; gap: 10px; }
     .auth-panel.active { display: flex; }
+
     .auth-status {
       display: flex;
       align-items: flex-start;
       gap: 10px;
-      padding: 11px 12px;
+      padding: 10px 12px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.02);
@@ -68,6 +99,7 @@
       font-size: 10px;
       line-height: 1.45;
     }
+
     .auth-status.waiting::before,
     .auth-status.ok::before,
     .auth-status.error::before {
@@ -78,23 +110,28 @@
       height: 7px;
       border-radius: 50%;
     }
+
     .auth-status.waiting::before {
       background: var(--amber);
       box-shadow: 0 0 8px var(--amber);
       animation: pulse 1.2s ease-in-out infinite;
     }
+
     .auth-status.ok::before {
       background: var(--green);
       box-shadow: 0 0 8px var(--green);
     }
+
     .auth-status.error::before {
       background: var(--red);
       box-shadow: 0 0 8px var(--red);
     }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.35; }
     }
+
     .auth-steps {
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -104,6 +141,7 @@
       line-height: 1.55;
       color: var(--muted);
     }
+
     .auth-steps strong {
       display: block;
       color: var(--text);
@@ -112,17 +150,22 @@
       text-transform: uppercase;
       margin-bottom: 6px;
     }
+
     .auth-steps ol {
       margin: 0;
       padding-left: 16px;
     }
+
     .auth-steps li + li { margin-top: 4px; }
+
     .auth-steps--warn {
       border-color: rgba(245, 158, 11, 0.28);
       background: rgba(245, 158, 11, 0.06);
     }
+
     .auth-tabs--dual .auth-tab[data-tab="browser"] { display: none; }
     .auth-tabs--dual .auth-tab[data-tab="external"] { display: block; }
+
     .auth-steps code {
       font-family: var(--font-mono);
       font-size: 9px;
@@ -131,6 +174,7 @@
       padding: 1px 4px;
       border-radius: 3px;
     }
+
     .auth-field label {
       display: block;
       font-size: 9px;
@@ -139,6 +183,7 @@
       color: var(--muted);
       margin-bottom: 5px;
     }
+
     .auth-field textarea,
     .auth-field input {
       width: 100%;
@@ -150,37 +195,45 @@
       font-size: 10px;
       padding: 9px 11px;
     }
+
     .auth-field textarea {
-      flex: 1;
-      min-height: 108px;
-      max-height: 140px;
-      resize: none;
+      min-height: 96px;
+      max-height: 160px;
+      resize: vertical;
       line-height: 1.4;
     }
-    .auth-field input { margin-bottom: 0; }
+
     .auth-hint {
       font-size: 9px;
       color: var(--muted);
       line-height: 1.4;
       font-family: var(--font-mono);
+      margin-top: 4px;
     }
+
     .auth-hint.auth-scan {
       color: rgba(34, 197, 94, 0.85);
-      margin-top: 4px;
       min-height: 12px;
     }
-    .auth-field--compact { margin-top: -4px; }
-    .auth-actions--paste button { font-size: 9px; padding: 8px 6px; }
+
+    .auth-field--compact { margin-top: 6px; }
+
+    .auth-actions {
+      display: none;
+      gap: 7px;
+    }
+
+    .auth-actions.active {
+      display: flex;
+    }
+
+    .auth-actions--paste button { font-size: 9px; padding: 10px 6px; }
+
     .auth-actions--paste button#auth-read-clipboard {
       border-color: rgba(66, 133, 244, 0.35);
       background: rgba(66, 133, 244, 0.1);
     }
-    .auth-actions {
-      display: flex;
-      gap: 7px;
-      margin-top: auto;
-      padding-top: 4px;
-    }
+
     .auth-actions button {
       flex: 1;
       border-radius: 8px;
@@ -191,15 +244,19 @@
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      padding: 9px 10px;
+      padding: 11px 10px;
       cursor: pointer;
       transition: border-color 0.15s ease, background 0.15s ease;
     }
+
     .auth-actions button.primary {
-      border-color: rgba(34, 197, 94, 0.35);
-      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.16);
+      color: var(--green);
     }
+
     .auth-actions button:hover { border-color: rgba(255, 255, 255, 0.18); }
+
     .auth-actions button:disabled {
       opacity: 0.45;
       cursor: not-allowed;
@@ -208,74 +265,78 @@
 </head>
 <body>
   <div class="auth-shell">
-    <h1 id="auth-title">Sign In</h1>
-    <p id="auth-desc">Sign in with the in-app browser, or paste cookies copied from your browser.</p>
+    <header class="auth-head">
+      <h1 id="auth-title">Sign In</h1>
+      <p id="auth-desc">Sign in with the in-app browser, or paste cookies copied from your browser.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Sign-in method">
+        <button type="button" class="auth-tab active" id="tab-browser" role="tab" aria-selected="true" data-tab="browser">In-app browser</button>
+        <button type="button" class="auth-tab" id="tab-external" role="tab" aria-selected="false" data-tab="external" hidden>Chrome sign-in</button>
+        <button type="button" class="auth-tab" id="tab-paste" role="tab" aria-selected="false" data-tab="paste">Paste cookies</button>
+      </div>
+      <div class="auth-status waiting" id="auth-status" role="status">Waiting for in-app sign-in…</div>
+    </header>
 
-    <div class="auth-tabs" role="tablist" aria-label="Sign-in method">
-      <button type="button" class="auth-tab active" id="tab-browser" role="tab" aria-selected="true" data-tab="browser">In-app browser</button>
-      <button type="button" class="auth-tab" id="tab-external" role="tab" aria-selected="false" data-tab="external" hidden>Chrome sign-in</button>
-      <button type="button" class="auth-tab" id="tab-paste" role="tab" aria-selected="false" data-tab="paste">Paste cookies</button>
+    <div class="auth-scroll">
+      <section class="auth-panel active" id="panel-browser" role="tabpanel" aria-labelledby="tab-browser">
+        <div class="auth-steps">
+          <strong>Browser sign-in</strong>
+          <ol>
+            <li>Complete login in the API-Meter browser window.</li>
+            <li>Session is detected automatically when you land on the site.</li>
+            <li>Use <em>Check session</em> if detection is slow.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="auth-panel" id="panel-external" role="tabpanel" aria-labelledby="tab-external">
+        <div class="auth-steps auth-steps--warn">
+          <strong>Google requires a real browser</strong>
+          <ol>
+            <li>Click <em>Open Chrome</em> — this window minimizes automatically.</li>
+            <li>Sign in at Gemini in Chrome or Edge.</li>
+            <li>Restore API-Meter from the taskbar, then click <em>Import from browser</em>.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="auth-panel" id="panel-paste" role="tabpanel" aria-labelledby="tab-paste">
+        <div class="auth-steps">
+          <strong>EditThisCookie export</strong>
+          <ol>
+            <li>On gemini.google.com, open EditThisCookie → <code>Export</code>.</li>
+            <li>Click <em>Read clipboard</em> below or paste the JSON here.</li>
+          </ol>
+        </div>
+        <div class="auth-field">
+          <label for="auth-cookie-paste">Cookie export</label>
+          <textarea id="auth-cookie-paste" placeholder="Paste EditThisCookie JSON export here…" spellcheck="false" autocomplete="off"></textarea>
+          <p class="auth-hint" id="auth-cookie-hint">Session cookies: sessionKey, anthropic-session</p>
+          <p class="auth-hint auth-scan" id="auth-scan-meta"></p>
+        </div>
+        <div class="auth-field auth-field--compact">
+          <label for="auth-cookie-name">Single value only (optional)</label>
+          <input id="auth-cookie-name" type="text" placeholder="Cookie name when pasting one token" autocomplete="off">
+        </div>
+      </section>
     </div>
 
-    <div class="auth-status waiting" id="auth-status" role="status">Waiting for in-app sign-in…</div>
-
-    <section class="auth-panel active" id="panel-browser" role="tabpanel" aria-labelledby="tab-browser">
-      <div class="auth-steps">
-        <strong>Browser sign-in</strong>
-        <ol>
-          <li>Complete login in the API-Meter browser window.</li>
-          <li>Session is detected automatically when you land on the site.</li>
-          <li>Use <em>Check session</em> if detection is slow.</li>
-        </ol>
-      </div>
-      <div class="auth-actions">
+    <footer class="auth-footer">
+      <div class="auth-actions active" id="actions-browser" data-tab="browser">
         <button type="button" id="auth-cancel">Cancel</button>
         <button type="button" id="auth-retry" class="primary">Check session</button>
       </div>
-    </section>
-
-    <section class="auth-panel" id="panel-external" role="tabpanel" aria-labelledby="tab-external">
-      <div class="auth-steps auth-steps--warn">
-        <strong>Google requires a real browser</strong>
-        <ol>
-          <li>Click <em>Open Chrome</em> — this window minimizes automatically.</li>
-          <li>Sign in at Gemini in Chrome or Edge.</li>
-          <li>Restore API-Meter from the taskbar, then click <em>Import from browser</em>.</li>
-        </ol>
-      </div>
-      <div class="auth-actions">
+      <div class="auth-actions" id="actions-external" data-tab="external">
         <button type="button" id="auth-cancel-external">Cancel</button>
         <button type="button" id="auth-minimize-external">Minimize</button>
         <button type="button" id="auth-open-external">Open Chrome</button>
         <button type="button" id="auth-import-browser" class="primary">Import from browser</button>
       </div>
-    </section>
-
-    <section class="auth-panel" id="panel-paste" role="tabpanel" aria-labelledby="tab-paste">
-      <div class="auth-steps">
-        <strong>EditThisCookie export</strong>
-        <ol>
-          <li>On the provider site, open EditThisCookie → <code>Export</code>.</li>
-          <li>JSON is copied to clipboard (all cookies for that page).</li>
-          <li>Click <em>Read clipboard</em> or paste below — we scan and pick the session cookie.</li>
-        </ol>
-      </div>
-      <div class="auth-field">
-        <label for="auth-cookie-paste">Cookie export</label>
-        <textarea id="auth-cookie-paste" placeholder="Paste EditThisCookie JSON export here…" spellcheck="false" autocomplete="off"></textarea>
-        <p class="auth-hint" id="auth-cookie-hint">Session cookies: sessionKey, anthropic-session</p>
-        <p class="auth-hint auth-scan" id="auth-scan-meta"></p>
-      </div>
-      <div class="auth-field auth-field--compact">
-        <label for="auth-cookie-name">Single value only (optional)</label>
-        <input id="auth-cookie-name" type="text" placeholder="Cookie name when pasting one token" autocomplete="off">
-      </div>
-      <div class="auth-actions auth-actions--paste">
+      <div class="auth-actions auth-actions--paste" id="actions-paste" data-tab="paste">
         <button type="button" id="auth-cancel-paste">Cancel</button>
         <button type="button" id="auth-read-clipboard">Read clipboard</button>
         <button type="button" id="auth-import" class="primary">Import &amp; connect</button>
       </div>
-    </section>
+    </footer>
   </div>
   <script type="module" src="auth-prompt.js"></script>
 </body>

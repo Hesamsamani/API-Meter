@@ -53,6 +53,10 @@ function setTab(tab) {
     panel.classList.toggle('active', show);
   });
 
+  document.querySelectorAll('.auth-actions').forEach((footer) => {
+    footer.classList.toggle('active', footer.dataset.tab === activeTab);
+  });
+
   window.apiMeter.setAuthTab?.(activeTab);
 }
 

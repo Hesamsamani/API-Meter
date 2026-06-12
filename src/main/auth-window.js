@@ -61,10 +61,12 @@ function minimizeAuthPrompt() {
 function createAuthPromptWindow(opts) {
   const external = !!opts.externalBrowser;
   const win = new BrowserWindow({
-    width: external ? 400 : 440,
-    height: external ? 460 : 540,
+    width: external ? 420 : 440,
+    height: 580,
     show: false,
-    resizable: false,
+    resizable: true,
+    minWidth: 380,
+    minHeight: 480,
     frame: false,
     alwaysOnTop: !external,
     backgroundColor: '#0a0a0b',
