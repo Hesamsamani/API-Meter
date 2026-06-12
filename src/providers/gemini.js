@@ -79,7 +79,7 @@ function mapLocalGemini(sessionsToday) {
     providerId: 'gemini',
     source: 'local',
     plan: 'AI Pro',
-    windows: [{ key: 'day', label: 'DAY', utilization, resetsAt: end.toISOString() }],
+    windows: [{ key: 'current', label: '5H', utilization, resetsAt: end.toISOString() }],
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -239,11 +239,14 @@ async function prepareGeminiSession() {
 async function fetchGeminiFromUsagePage() {
   const pagePayload = await fetchGeminiUsagePage({ timeoutMs: GEMINI_POST_TIMEOUT_MS });
   const parsed = parseGeminiUsagePageSource(pagePayload);
-  const mapped = mapUsagePageToSnapshot(parsed.windows);
+  const mapped = mapUsagePageToSnapshot(parsed.windows, { resetTimes: parsed.resetTimes });
   if (!mapped?.windows?.length) {
     throw new Error('Gemini usage page: quota data not found');
   }
-  const primary = parsed.windows.find((w) => w.key === 'pro') || parsed.windows[0];
+  const primary = parsed.windows.find((w) => w.key === 'current')
+    || parsed.windows.find((w) => w.key === 'weekly')
+    || parsed.windows.find((w) => w.key === 'pro')
+    || parsed.windows[0];
   return {
     providerId: 'gemini',
     source: 'live',
@@ -273,10 +276,10 @@ async function fetchGeminiFromBatchExecute() {
     source: 'live',
     plan: inferGeminiPlan(normalized),
     windows: [{
-      key: 'pro',
-      label: 'PRO',
+      key: 'current',
+      label: '5H',
       utilization: clampPercent((dayUsed / dayLimit) * 100),
-      resetsAt: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString(),
+      resetsAt: new Date(Date.now() + 5 * 3600000).toISOString(),
     }],
     fetchedAt: new Date().toISOString(),
   };
