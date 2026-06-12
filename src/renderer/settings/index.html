@@ -19,115 +19,192 @@
       </div>
     </header>
 
-    <form class="settings-body" id="settings-form">
-      <section class="settings-section">
-        <h2>General</h2>
-        <label class="field-check">
-          <input type="checkbox" id="launch-at-startup">
-          <span>Launch at Windows startup</span>
-        </label>
-        <p class="field-hint">Starts minimized to the system tray when you sign in to Windows.</p>
-      </section>
+    <div class="settings-layout">
+      <nav class="settings-sidebar" aria-label="Settings categories">
+        <button type="button" class="settings-nav-item active" data-panel="general" aria-current="page">
+          <span class="settings-nav-icon" aria-hidden="true">◆</span>
+          <span class="settings-nav-label">General</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-panel="refresh">
+          <span class="settings-nav-icon" aria-hidden="true">↻</span>
+          <span class="settings-nav-label">Refresh</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-panel="alerts">
+          <span class="settings-nav-icon" aria-hidden="true">!</span>
+          <span class="settings-nav-label">Alerts</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-panel="widget">
+          <span class="settings-nav-icon" aria-hidden="true">◎</span>
+          <span class="settings-nav-label">Widget</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-panel="providers">
+          <span class="settings-nav-icon" aria-hidden="true">⊞</span>
+          <span class="settings-nav-label">Providers</span>
+        </button>
+        <button type="button" class="settings-nav-item" data-panel="accounts">
+          <span class="settings-nav-icon" aria-hidden="true">⎔</span>
+          <span class="settings-nav-label">Accounts</span>
+        </button>
+      </nav>
 
-      <section class="settings-section">
-        <h2>Telemetry</h2>
-        <label class="field-row">
-          <span>Usage display</span>
-          <select id="usage-display-mode">
-            <option value="used">Used (0% → 100%)</option>
-            <option value="remaining">Remaining (100% → 0%)</option>
-          </select>
-        </label>
-        <p class="field-hint">Controls gauges, widgets, tray tooltip, and charts. Alerts always fire on % used.</p>
-        <label class="field-row">
-          <span>Refresh interval (minutes)</span>
-          <input type="number" id="refresh-interval" min="1" max="60" step="1">
-        </label>
-        <label class="field-check">
-          <input type="checkbox" id="auto-refresh">
-          <span>Auto-refresh enabled</span>
-        </label>
-      </section>
+      <form class="settings-main" id="settings-form">
+        <div class="settings-panels">
+          <section class="settings-panel active" id="panel-general" data-panel="general">
+            <header class="settings-panel-head">
+              <h2>General</h2>
+              <p>Startup and system behavior</p>
+            </header>
+            <div class="settings-panel-body">
+              <label class="field-check">
+                <input type="checkbox" id="launch-at-startup">
+                <span>Launch at Windows startup</span>
+              </label>
+              <p class="field-hint">Starts minimized to the system tray when you sign in to Windows.</p>
+            </div>
+          </section>
 
-      <section class="settings-section">
-        <h2>Alerts</h2>
-        <label class="field-check">
-          <input type="checkbox" id="alerts-enabled">
-          <span>Desktop notifications</span>
-        </label>
-        <label class="field-row">
-          <span>Warn threshold (%)</span>
-          <input type="number" id="warn-threshold" min="1" max="99" step="1">
-        </label>
-        <label class="field-row">
-          <span>Danger threshold (%)</span>
-          <input type="number" id="danger-threshold" min="1" max="100" step="1">
-        </label>
-      </section>
+          <section class="settings-panel" id="panel-refresh" data-panel="refresh" hidden>
+            <header class="settings-panel-head">
+              <h2>Refresh</h2>
+              <p>How usage data is fetched and displayed</p>
+            </header>
+            <div class="settings-panel-body">
+              <label class="field-row">
+                <span>Usage display</span>
+                <select id="usage-display-mode">
+                  <option value="used">Used (0% → 100%)</option>
+                  <option value="remaining">Remaining (100% → 0%)</option>
+                </select>
+              </label>
+              <p class="field-hint">Controls gauges, widgets, tray tooltip, and charts. Alerts always fire on % used.</p>
+              <label class="field-row">
+                <span>Refresh interval (minutes)</span>
+                <input type="number" id="refresh-interval" min="1" max="60" step="1">
+              </label>
+              <label class="field-check">
+                <input type="checkbox" id="auto-refresh">
+                <span>Auto-refresh enabled</span>
+              </label>
+            </div>
+          </section>
 
-      <section class="settings-section">
-        <h2>Floating Widget</h2>
-        <label class="field-row">
-          <span>Display mode</span>
-          <select id="widget-display-mode">
-            <option value="single">Single provider</option>
-            <option value="grid">Grid (all pinned)</option>
-            <option value="compact">Compact list</option>
-            <option value="orb">Orbs (minimal)</option>
-          </select>
-        </label>
-        <label class="field-row">
-          <span>Draw order</span>
-          <select id="widget-layer-order">
-            <option value="always-on-top">Always on top (recommended)</option>
-            <option value="desktop">Desktop layer (survives Win+D)</option>
-            <option value="normal">Normal (behind other windows)</option>
-          </select>
-        </label>
-        <p class="field-hint" id="widget-layer-order-hint">Always on top keeps the widget visible above apps. Desktop layer pins behind windows and survives Show Desktop — use if the widget disappears.</p>
-        <label class="field-check">
-          <input type="checkbox" id="widget-click-through">
-          <span>Click-through mode (Rainmeter-style — right-click widget to toggle)</span>
-        </label>
-        <label class="field-row">
-          <span>Size</span>
-          <select id="widget-size">
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-        </label>
-        <label class="field-row">
-          <span>Theme</span>
-          <select id="widget-theme">
-            <option value="dark">Dark</option>
-            <option value="midnight">Midnight</option>
-            <option value="glass">Glass</option>
-            <option value="light">Light</option>
-            <option value="minimal">Minimal</option>
-          </select>
-        </label>
-        <label class="field-row">
-          <span>Opacity</span>
-          <input type="range" id="widget-opacity" min="50" max="100" step="5">
-        </label>
-        <label class="field-check">
-          <input type="checkbox" id="widget-auto-rotate">
-          <span>Auto-rotate (single mode, 10s)</span>
-        </label>
-        <p class="field-hint">Pin providers for grid/list/orb modes. Right-click for click-through. Use −/+ and ◐ for quick resize/theme.</p>
-        <div class="widget-pin-grid" id="widget-pin-grid"></div>
-      </section>
+          <section class="settings-panel" id="panel-alerts" data-panel="alerts" hidden>
+            <header class="settings-panel-head">
+              <h2>Alerts</h2>
+              <p>Desktop notifications when quotas climb</p>
+            </header>
+            <div class="settings-panel-body">
+              <label class="field-check">
+                <input type="checkbox" id="alerts-enabled">
+                <span>Desktop notifications</span>
+              </label>
+              <label class="field-row">
+                <span>Warn threshold (%)</span>
+                <input type="number" id="warn-threshold" min="1" max="99" step="1">
+              </label>
+              <label class="field-row">
+                <span>Danger threshold (%)</span>
+                <input type="number" id="danger-threshold" min="1" max="100" step="1">
+              </label>
+            </div>
+          </section>
 
-      <section class="settings-section">
-        <h2>Providers</h2>
-        <div class="provider-toggles" id="provider-toggles"></div>
-      </section>
+          <section class="settings-panel" id="panel-widget" data-panel="widget" hidden>
+            <header class="settings-panel-head">
+              <h2>Floating widget</h2>
+              <p>Overlay layout, appearance, and pinned providers</p>
+            </header>
+            <div class="settings-panel-body">
+              <div class="settings-subgroup">
+                <h3>Layout</h3>
+                <label class="field-row">
+                  <span>Display mode</span>
+                  <select id="widget-display-mode">
+                    <option value="single">Single provider</option>
+                    <option value="grid">Grid (all pinned)</option>
+                    <option value="compact">Compact list</option>
+                    <option value="orb">Orbs (minimal)</option>
+                  </select>
+                </label>
+                <label class="field-row">
+                  <span>Draw order</span>
+                  <select id="widget-layer-order">
+                    <option value="always-on-top">Always on top (recommended)</option>
+                    <option value="desktop">Desktop layer (survives Win+D)</option>
+                    <option value="normal">Normal (behind other windows)</option>
+                  </select>
+                </label>
+                <p class="field-hint" id="widget-layer-order-hint">Always on top keeps the widget visible above apps. Desktop layer pins behind windows and survives Show Desktop — use if the widget disappears.</p>
+                <label class="field-check">
+                  <input type="checkbox" id="widget-click-through">
+                  <span>Click-through mode (right-click widget to toggle)</span>
+                </label>
+                <label class="field-check">
+                  <input type="checkbox" id="widget-auto-rotate">
+                  <span>Auto-rotate (single mode, 10s)</span>
+                </label>
+              </div>
+              <div class="settings-subgroup">
+                <h3>Appearance</h3>
+                <label class="field-row">
+                  <span>Size</span>
+                  <select id="widget-size">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </label>
+                <label class="field-row">
+                  <span>Theme</span>
+                  <select id="widget-theme">
+                    <option value="dark">Dark</option>
+                    <option value="midnight">Midnight</option>
+                    <option value="glass">Glass</option>
+                    <option value="light">Light</option>
+                    <option value="minimal">Minimal</option>
+                  </select>
+                </label>
+                <label class="field-row">
+                  <span>Opacity</span>
+                  <input type="range" id="widget-opacity" min="50" max="100" step="5">
+                </label>
+              </div>
+              <div class="settings-subgroup">
+                <h3>Pinned providers</h3>
+                <p class="field-hint">Used in grid, list, and orb modes. Right-click the widget for quick resize and theme.</p>
+                <div class="widget-pin-grid" id="widget-pin-grid"></div>
+              </div>
+            </div>
+          </section>
 
-      <div class="settings-actions">
-        <button type="submit" class="btn-primary">Save</button>
-      </div>
-    </form>
+          <section class="settings-panel" id="panel-providers" data-panel="providers" hidden>
+            <header class="settings-panel-head">
+              <h2>Providers</h2>
+              <p>Choose which services appear in the dashboard</p>
+            </header>
+            <div class="settings-panel-body">
+              <div class="provider-toggles" id="provider-toggles"></div>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="panel-accounts" data-panel="accounts" hidden>
+            <header class="settings-panel-head">
+              <h2>Accounts</h2>
+              <p>Re-authenticate or disconnect each provider</p>
+            </header>
+            <div class="settings-panel-body">
+              <p class="field-hint settings-accounts-intro">Use <strong>Re-login</strong> to open the sign-in flow. <strong>Disconnect</strong> clears stored credentials. Gemini also offers <strong>Reset &amp; sign in</strong> to purge all Google cookies when sessions go stale.</p>
+              <div class="provider-auth-list" id="provider-auth-list"></div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="settings-footer">
+          <p class="settings-save-hint" id="settings-save-hint" hidden>Unsaved changes</p>
+          <button type="submit" class="btn-primary">Save settings</button>
+        </footer>
+      </form>
+    </div>
   </div>
 
   <script type="module" src="settings.js"></script>

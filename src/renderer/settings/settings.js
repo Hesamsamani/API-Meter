@@ -3,10 +3,50 @@ import { ORDER, PROVIDER_META } from '../shared/provider-card.js';
 const form = document.getElementById('settings-form');
 const providerToggles = document.getElementById('provider-toggles');
 const widgetPinGrid = document.getElementById('widget-pin-grid');
+const providerAuthList = document.getElementById('provider-auth-list');
+const saveHint = document.getElementById('settings-save-hint');
 const btnClose = document.getElementById('btn-close');
+const navItems = [...document.querySelectorAll('.settings-nav-item')];
+const panels = [...document.querySelectorAll('.settings-panel')];
+
+const AUTH_HINTS = {
+  'claude-ai': 'Browser sign-in or cookie paste',
+  'claude-code': 'Local OAuth token from CLI',
+  gemini: 'Browser sign-in or cookie paste',
+  perplexity: 'Browser sign-in',
+  grok: 'Local OAuth token',
+  cursor: 'Local session from Cursor app',
+};
 
 let current = {};
 let formDirty = false;
+let activePanel = 'general';
+
+function setActivePanel(panelId) {
+  activePanel = panelId;
+  navItems.forEach((btn) => {
+    const active = btn.dataset.panel === panelId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-current', active ? 'page' : 'false');
+  });
+  panels.forEach((panel) => {
+    const show = panel.dataset.panel === panelId;
+    panel.classList.toggle('active', show);
+    panel.hidden = !show;
+  });
+}
+
+function bindSidebarNav() {
+  navItems.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setActivePanel(btn.dataset.panel);
+    });
+  });
+}
+
+function syncDirtyUi() {
+  if (saveHint) saveHint.hidden = !formDirty;
+}
 
 function renderProviderToggles(providers) {
   providerToggles.replaceChildren();
@@ -16,7 +56,10 @@ function renderProviderToggles(providers) {
     label.className = 'field-check provider-toggle';
     label.innerHTML = `
       <input type="checkbox" data-provider="${id}" ${providers[id]?.enabled !== false ? 'checked' : ''}>
-      <span>${meta.label}</span>
+      <span class="provider-toggle-label">
+        <span class="provider-toggle-dot" style="--accent:${meta.accent}"></span>
+        ${meta.label}
+      </span>
     `;
     providerToggles.appendChild(label);
   });
@@ -34,6 +77,69 @@ function renderWidgetPins(pinned = []) {
       <span>${meta.label}</span>
     `;
     widgetPinGrid.appendChild(label);
+  });
+}
+
+function runProviderAction(providerId, action, button) {
+  const actions = {
+    login: () => window.apiMeter.loginProvider(providerId),
+    logout: () => window.apiMeter.logoutProvider(providerId),
+    reset: () => window.apiMeter.resetProvider(providerId),
+  };
+  const fn = actions[action];
+  if (!fn) return;
+
+  const card = button.closest('.provider-auth-card');
+  card?.classList.add('provider-auth-card--busy');
+  button.disabled = true;
+
+  fn()
+    .catch((err) => {
+      console.error(`${action} failed for ${providerId}:`, err);
+    })
+    .finally(() => {
+      card?.classList.remove('provider-auth-card--busy');
+      button.disabled = false;
+    });
+}
+
+function renderProviderAuthList() {
+  if (!providerAuthList) return;
+  providerAuthList.replaceChildren();
+
+  ORDER.forEach((id) => {
+    const meta = PROVIDER_META[id];
+    const card = document.createElement('article');
+    card.className = 'provider-auth-card';
+    card.dataset.providerId = id;
+    card.style.setProperty('--accent', meta.accent);
+
+    const resetBtn = id === 'gemini'
+      ? '<button type="button" class="btn-chip warning" data-action="reset">Reset & sign in</button>'
+      : '';
+
+    card.innerHTML = `
+      <div class="provider-auth-head">
+        <span class="provider-auth-avatar" aria-hidden="true">${meta.initials}</span>
+        <div class="provider-auth-meta">
+          <h3>${meta.label}</h3>
+          <p class="field-hint">${AUTH_HINTS[id] || 'Sign in required'}</p>
+        </div>
+      </div>
+      <div class="provider-auth-actions">
+        <button type="button" class="btn-chip" data-action="login">Re-login</button>
+        <button type="button" class="btn-chip danger" data-action="logout">Disconnect</button>
+        ${resetBtn}
+      </div>
+    `;
+
+    card.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        runProviderAction(id, btn.dataset.action, btn);
+      });
+    });
+
+    providerAuthList.appendChild(card);
   });
 }
 
@@ -118,6 +224,10 @@ function collectPatch() {
 }
 
 async function init() {
+  bindSidebarNav();
+  renderProviderAuthList();
+  setActivePanel(activePanel);
+
   btnClose?.addEventListener('click', () => window.apiMeter.closeWindow());
 
   try {
@@ -159,8 +269,13 @@ async function init() {
     populateForm(incoming);
   });
 
-  form?.addEventListener('input', () => { formDirty = true; });
-  form?.addEventListener('change', () => { formDirty = true; });
+  const markDirty = () => {
+    formDirty = true;
+    syncDirtyUi();
+  };
+
+  form?.addEventListener('input', markDirty);
+  form?.addEventListener('change', markDirty);
 
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -176,6 +291,7 @@ async function init() {
       }
       current = await window.apiMeter.updateSettings(patch);
       formDirty = false;
+      syncDirtyUi();
       populateForm(current);
     } catch (err) {
       console.error('Save failed:', err);

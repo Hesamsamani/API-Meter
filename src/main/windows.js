@@ -79,8 +79,8 @@ function createPopoverWindow() {
 
 function createSettingsWindow() {
   const win = new BrowserWindow({
-    width: 480,
-    height: 620,
+    width: 680,
+    height: 560,
     show: false,
     frame: false,
     resizable: false,
