@@ -23,6 +23,7 @@ function geminiAuthWindowOptions() {
     externalBrowser: true,
     loginUrl: GEMINI_USAGE_PAGE_URL,
     domain: '.google.com',
+    extraDomains: ['.gemini.google.com'],
     cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
     secretKey: 'gemini-session',
     title: 'Login to Gemini',

@@ -2,9 +2,9 @@
 
 function mapSameSite(val) {
   const v = String(val || '').toLowerCase();
-  if (v === 'lax' || v === 'strict' || v === 'no_restriction') return v;
+  if (v === 'lax' || v === 'strict' || v === 'no_restriction' || v === 'unspecified') return v;
   if (v === 'none') return 'no_restriction';
-  return 'no_restriction';
+  return 'unspecified';
 }
 
 function normalizeCookieObject(raw) {
@@ -121,6 +121,11 @@ function providerHosts(opts) {
   const hosts = new Set();
   if (opts?.domain) {
     hosts.add(opts.domain.replace(/^\./, '').toLowerCase());
+  }
+  for (const extra of opts?.extraDomains || []) {
+    if (typeof extra === 'string' && extra.trim()) {
+      hosts.add(extra.replace(/^\./, '').toLowerCase());
+    }
   }
   if (opts?.loginUrl) {
     try {

@@ -11,6 +11,42 @@ const { fetchViaWindow, postViaWindow } = require('./fetch-via-window');
 
 const GEMINI_ORIGIN = 'https://gemini.google.com/';
 
+const GOOGLE_SESSION_COOKIE_NAMES = new Set([
+  'SID',
+  'HSID',
+  'SSID',
+  'APISID',
+  'SAPISID',
+  'NID',
+  'COMPASS',
+  '__Secure-1PSID',
+  '__Secure-3PSID',
+  '__Secure-1PSIDTS',
+  '__Secure-3PSIDTS',
+  '__Secure-1PSIDCC',
+  '__Secure-3PSIDCC',
+  '__Secure-1PAPISID',
+  '__Secure-3PAPISID',
+  '__Secure-1PSIDRTS',
+  '__Secure-3PSIDRTS',
+  '__Secure-BUCKET',
+  '__Secure-ENID',
+  '__Secure-STRP',
+  'AEC',
+]);
+
+function isGoogleCookieDomain(domain) {
+  const d = String(domain || '').replace(/^\./, '').toLowerCase();
+  return d === 'google.com' || d.endsWith('.google.com');
+}
+
+function shouldForceSecureGoogle(cookie) {
+  if (!isGoogleCookieDomain(cookie.domain)) return false;
+  const name = cookie.name || '';
+  if (name.startsWith('__Secure-') || name.startsWith('__Host-')) return true;
+  return GOOGLE_SESSION_COOKIE_NAMES.has(name);
+}
+
 function looksLikeCookiePaste(raw) {
   const text = String(raw || '').trim();
   if (!text) return false;
@@ -55,20 +91,24 @@ async function importCookiesFromPaste(opts, rawInput) {
   const defaultDomain = opts.domain;
   const loginUrl = opts.loginUrl || `https://${(defaultDomain || '').replace(/^\./, '')}/`;
 
-  const named = relevant.filter((c) => c.name && c.value != null && preferred.includes(c.name));
-  const toImport = named.length ? named : relevant.filter((c) => c.name && c.value != null);
+  const toImport = relevant.filter((c) => c.name && c.value != null);
 
-  const toSet = toImport.map((c) => ({
-    url: c.domain ? cookieSetUrl(c) : loginUrl,
-    name: c.name,
-    value: c.value,
-    domain: c.domain || defaultDomain,
-    path: c.path || '/',
-    secure: c.secure !== false,
-    httpOnly: c.httpOnly === true,
-    sameSite: c.sameSite || 'lax',
-    expirationDate: c.expirationDate,
-  }));
+  const toSet = toImport.map((c) => {
+    const forceSecure = shouldForceSecureGoogle(c);
+    const secure = forceSecure ? true : c.secure !== false;
+    const withSecure = forceSecure ? { ...c, secure: true } : c;
+    return {
+      url: c.domain ? cookieSetUrl(withSecure) : loginUrl,
+      name: c.name,
+      value: c.value,
+      domain: c.domain || defaultDomain,
+      path: c.path || '/',
+      secure,
+      httpOnly: c.httpOnly === true,
+      sameSite: c.sameSite || 'lax',
+      expirationDate: c.expirationDate,
+    };
+  });
 
   await setCookies(ses, toSet, {
     loginUrl,
@@ -76,6 +116,7 @@ async function importCookiesFromPaste(opts, rawInput) {
     requiredNames: [primary.name],
   });
   await flushCookies(ses);
+  await new Promise((r) => setTimeout(r, 250));
 
   setSecret(opts.secretKey, primary.value);
   setSecret(`${opts.secretKey}-cookie-name`, primary.name);
@@ -106,6 +147,8 @@ async function verifyImportedSession(opts) {
   let body;
   if (isGeminiBatchExecuteProbe(opts)) {
     const { buildGeminiQuotaReqBody, GEMINI_POST_TIMEOUT_MS } = require('../providers/gemini');
+    const { verifyGeminiPageSession } = require('./fetch-via-window');
+    await verifyGeminiPageSession({ timeoutMs: GEMINI_POST_TIMEOUT_MS });
     body = await postViaWindow(
       GEMINI_ORIGIN,
       buildGeminiProbePostUrl(opts.probeUrl),

@@ -39,6 +39,15 @@ test('verifyImportedSession Gemini probe uses GEMINI_POST_TIMEOUT_MS', () => {
   assert.match(cookieImportSrc, /timeoutMs:\s*GEMINI_POST_TIMEOUT_MS/);
 });
 
+test('verifyImportedSession Gemini runs page session check before batchexecute', () => {
+  assert.match(cookieImportSrc, /verifyGeminiPageSession/);
+});
+
+test('importCookiesFromPaste imports all provider cookies not only session names', () => {
+  assert.match(cookieImportSrc, /const toImport = relevant\.filter/);
+  assert.doesNotMatch(cookieImportSrc, /const named = relevant\.filter/);
+});
+
 test('buildGeminiProbePostUrl normalizes batchexecute URL for POST', () => {
   const url = buildGeminiProbePostUrl(
     'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',

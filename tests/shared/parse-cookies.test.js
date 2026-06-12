@@ -148,6 +148,22 @@ describe('filterCookiesForProvider', () => {
     assert.equal(filtered.length, 3);
     assert.ok(!filtered.some((c) => c.name === 'pplx.session'));
   });
+
+  it('keeps gemini.google.com cookies when extraDomains is set', () => {
+    const exportJson = JSON.stringify([
+      { domain: '.google.com', name: '__Secure-1PSID', path: '/', secure: true, value: 'sid' },
+      { domain: '.gemini.google.com', name: 'COMPASS', path: '/', secure: true, httpOnly: true, value: 'compass-token' },
+      { domain: '.perplexity.ai', name: 'pplx.session', path: '/', secure: true, value: 'other' },
+    ]);
+    const parsed = parseCookieString(exportJson);
+    const filtered = filterCookiesForProvider(parsed, {
+      domain: '.google.com',
+      extraDomains: ['.gemini.google.com'],
+      loginUrl: 'https://gemini.google.com/',
+    });
+    assert.equal(filtered.length, 2);
+    assert.ok(filtered.some((c) => c.name === 'COMPASS'));
+  });
 });
 
 describe('pickSessionCookie', () => {
