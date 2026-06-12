@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow or pain point
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: Affected areas
+      options:
+        - label: Dashboard
+        - label: Floating widget
+        - label: System tray
+        - label: Settings
+        - label: Provider parser
+        - label: Notifications / alerts

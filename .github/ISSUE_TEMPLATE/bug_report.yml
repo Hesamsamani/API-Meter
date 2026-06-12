@@ -1,0 +1,73 @@
+name: Bug report
+description: Something broke or behaves unexpectedly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please redact cookies, tokens, and personal account info.
+
+  - type: input
+    id: version
+    attributes:
+      label: API-Meter version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider (if applicable)
+      options:
+        - N/A
+        - Claude (claude.ai)
+        - Claude Code
+        - Gemini
+        - Perplexity
+        - Grok
+        - Cursor
+        - Tray / widget / settings
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open dashboard
+        2. Click Login on Gemini
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional — DevTools console or tray screenshot

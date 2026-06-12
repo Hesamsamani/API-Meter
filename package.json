@@ -1,27 +1,55 @@
 {
   "name": "api-meter",
   "version": "0.1.0",
-  "description": "Multi-provider AI usage monitor",
+  "description": "Windows system-tray command center for AI provider usage limits — Claude, Gemini, Grok, Cursor, Perplexity, and more.",
   "main": "main.js",
+  "author": "Hesam Samani",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hesamsamani/API-Meter.git"
+  },
+  "homepage": "https://github.com/Hesamsamani/API-Meter#readme",
+  "bugs": {
+    "url": "https://github.com/Hesamsamani/API-Meter/issues"
+  },
+  "keywords": [
+    "electron",
+    "windows",
+    "system-tray",
+    "ai",
+    "usage-monitor",
+    "claude",
+    "gemini",
+    "grok",
+    "cursor",
+    "perplexity",
+    "rate-limit",
+    "quota"
+  ],
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
     "test": "node --test tests/**/*.test.js",
     "icons:generate": "node scripts/generate-icons.js",
+    "screenshots": "node scripts/capture-readme-screenshots.mjs",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
-  "engines": { "node": ">=18.0.0" },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
+    "better-sqlite3": "^11.7.0",
     "chart.js": "^4.5.1",
-    "electron-store": "^8.1.0",
-    "better-sqlite3": "^11.7.0"
+    "electron-store": "^8.1.0"
   },
   "devDependencies": {
     "electron": "^28.3.3",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "playwright": "^1.60.0"
   },
   "build": {
     "appId": "com.apimeter.app",
@@ -30,21 +58,41 @@
       "output": "dist",
       "buildResources": "assets"
     },
-    "files": ["**/*", "!tests/**", "!docs/**", "!scripts/**"],
-    "asarUnpack": ["**/node_modules/better-sqlite3/**"],
+    "files": [
+      "**/*",
+      "!tests/**",
+      "!docs/**",
+      "!scripts/**"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
     "extraResources": [
-      { "from": "assets/providers", "to": "assets/providers", "filter": ["**/*"] }
+      {
+        "from": "assets/providers",
+        "to": "assets/providers",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "assets/icon.png"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.png"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "assets/icon.png"
     }
   }
