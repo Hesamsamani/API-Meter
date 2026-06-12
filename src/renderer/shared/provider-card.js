@@ -51,7 +51,12 @@ function formatCountdown(resetsAt) {
 function isLoginRequired(snapshot) {
   if (!snapshot) return false;
   if (snapshot.authRequired) return true;
-  if (snapshot.source === 'local' && snapshot.windows?.length) return false;
+  if (snapshot.source === 'local' && snapshot.windows?.length) {
+    if (snapshot.refreshFailed && (isAuthErrorMessage(snapshot.error || '') || isGeminiSessionError(snapshot))) {
+      return true;
+    }
+    return false;
+  }
   return isAuthErrorMessage(snapshot.error || '');
 }
 
@@ -65,7 +70,7 @@ function isRetryableError(snapshot) {
 
 function isGeminiSessionError(snapshot) {
   const err = String(snapshot?.error || '');
-  return /SNlM0e|page token missing|gemini\.google\.com/i.test(err);
+  return /SNlM0e|page token missing|session expired|Re-login|gemini\.google\.com/i.test(err);
 }
 
 function statusClass(snapshot) {

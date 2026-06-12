@@ -241,6 +241,8 @@ async function handleCookiePaste(session, raw) {
     try {
       await verifyImportedSession(session.opts);
     } catch (err) {
+      setSecret(session.opts.secretKey, '');
+      setSecret(`${session.opts.secretKey}-cookie-name`, '');
       sendPrompt('auth-prompt:status', {
         status: `Cookies imported but verification failed: ${err.message || err}`,
         mode: 'error',

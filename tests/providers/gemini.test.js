@@ -9,6 +9,7 @@ import {
   buildGeminiQuotaReqBody,
   inferGeminiPlan,
   GEMINI_QUOTA_BATCH_URL,
+  GEMINI_POST_TIMEOUT_MS,
 } from '../../src/providers/gemini.js';
 
 const geminiSrc = readFileSync(
@@ -17,8 +18,18 @@ const geminiSrc = readFileSync(
 );
 import { extractGeminiPageTokens } from '../../src/shared/gemini-page-tokens.js';
 
-test('fetchLiveGemini uses extended postViaWindow timeout', () => {
-  assert.match(geminiSrc, /timeoutMs:\s*75000/);
+test('fetchLiveGemini uses shared GEMINI_POST_TIMEOUT_MS', () => {
+  assert.equal(GEMINI_POST_TIMEOUT_MS, 75000);
+  assert.match(geminiSrc, /timeoutMs:\s*GEMINI_POST_TIMEOUT_MS/);
+});
+
+test('extractGeminiQuota rejects implausible numeric pairs', () => {
+  const swapped = extractGeminiQuota([null, [1000, 12]]);
+  assert.equal(swapped.dayUsed, undefined);
+  assert.equal(swapped.dayLimit, undefined);
+  const valid = extractGeminiQuota([null, [12, 1000]]);
+  assert.equal(valid.dayUsed, 12);
+  assert.equal(valid.dayLimit, 1000);
 });
 
 test('buildGeminiQuotaReqBody encodes otAQ7b batchexecute payload', () => {

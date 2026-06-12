@@ -7,6 +7,7 @@ const { openAuthWindow } = require('../main/auth-window');
 const { getSecret } = require('../main/store');
 
 const AI_PRO_DAILY_LIMIT = 1000;
+const GEMINI_POST_TIMEOUT_MS = 75000;
 const GEMINI_ORIGIN = 'https://gemini.google.com/';
 const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b&rt=c';
 
@@ -63,10 +64,16 @@ function toFiniteNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isPlausibleQuotaPair(used, limit) {
+  if (used == null || limit == null) return false;
+  if (limit <= 0 || used < 0 || used > limit || limit > 1_000_000) return false;
+  return true;
+}
+
 function quotaPairFromArray(node) {
   if (!Array.isArray(node)) return null;
   const nums = node.map(toFiniteNumber).filter((n) => n != null);
-  if (nums.length >= 2) {
+  if (nums.length >= 2 && isPlausibleQuotaPair(nums[0], nums[1])) {
     return { used: nums[0], limit: nums[1] };
   }
   for (const item of node) {
@@ -116,7 +123,6 @@ function inferGeminiPlan(quota = {}) {
 function parseGeminiBatchRows(outer) {
   if (!Array.isArray(outer)) return null;
 
-  let otRow = null;
   let fallback = null;
 
   for (const row of outer) {
@@ -131,18 +137,14 @@ function parseGeminiBatchRows(outer) {
         : (inner && typeof inner === 'object' ? inner : null);
       if (!candidate) continue;
       const quota = extractGeminiQuota(candidate);
-      if (rpcId === 'otAQ7b') {
-        if (quotaHasUsage(quota)) return candidate;
-        if (!otRow) otRow = candidate;
-        continue;
-      }
+      if (rpcId === 'otAQ7b' && quotaHasUsage(quota)) return candidate;
       if (!fallback && quotaHasUsage(quota)) fallback = candidate;
     } catch {
       /* try next row */
     }
   }
 
-  return otRow || fallback;
+  return fallback;
 }
 
 function parseGeminiBatchExecute(bodyText) {
@@ -215,7 +217,7 @@ async function fetchLiveGemini() {
     GEMINI_ORIGIN,
     `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`,
     buildGeminiQuotaReqBody(),
-    { appendGoogleAtToken: true, timeoutMs: 75000 },
+    { appendGoogleAtToken: true, timeoutMs: GEMINI_POST_TIMEOUT_MS },
   );
   const inner = parseGeminiBatchExecute(raw);
   const quota = extractGeminiQuota(inner);
@@ -300,4 +302,5 @@ module.exports = {
   mapLocalGemini,
   buildGeminiQuotaReqBody,
   GEMINI_QUOTA_BATCH_URL,
+  GEMINI_POST_TIMEOUT_MS,
 };

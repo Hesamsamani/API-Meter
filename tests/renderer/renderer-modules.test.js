@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { isAuthErrorMessage } from '../../src/renderer/shared/auth-errors.js';
 import { thresholdClass, setAlertThresholds } from '../../src/renderer/shared/alert-thresholds.js';
+import {
+  isLoginRequired,
+  isRetryableError,
+  isGeminiSessionError,
+} from '../../src/renderer/shared/provider-card.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -20,6 +25,35 @@ test('renderer alert-thresholds is valid ESM', () => {
   assert.equal(thresholdClass(50), 'green');
   assert.equal(thresholdClass(85), 'amber');
   assert.equal(thresholdClass(96), 'red');
+});
+
+test('isLoginRequired treats Gemini refresh auth failures as login required', () => {
+  const staleLocal = {
+    source: 'local',
+    refreshFailed: true,
+    windows: [{ key: 'day', utilization: 0 }],
+    error: 'Gemini session expired — use Re-login',
+  };
+  assert.equal(isLoginRequired(staleLocal), true);
+  assert.equal(isRetryableError(staleLocal), false);
+  assert.equal(isGeminiSessionError(staleLocal), true);
+
+  const tokenMissing = {
+    source: 'local',
+    refreshFailed: true,
+    windows: [{ key: 'day', utilization: 0 }],
+    error: 'Gemini page token missing (SNlM0e) — open gemini.google.com while signed in',
+  };
+  assert.equal(isLoginRequired(tokenMissing), true);
+
+  const timeout = {
+    source: 'local',
+    refreshFailed: true,
+    windows: [{ key: 'day', utilization: 0 }],
+    error: 'Request timeout',
+  };
+  assert.equal(isLoginRequired(timeout), false);
+  assert.equal(isRetryableError(timeout), true);
 });
 
 test('provider-card imports only renderer-local shared modules', () => {

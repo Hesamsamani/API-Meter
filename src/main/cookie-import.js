@@ -105,12 +105,12 @@ async function verifyImportedSession(opts) {
   if (!opts.probeUrl) return true;
   let body;
   if (isGeminiBatchExecuteProbe(opts)) {
-    const { buildGeminiQuotaReqBody } = require('../providers/gemini');
+    const { buildGeminiQuotaReqBody, GEMINI_POST_TIMEOUT_MS } = require('../providers/gemini');
     body = await postViaWindow(
       GEMINI_ORIGIN,
       buildGeminiProbePostUrl(opts.probeUrl),
       buildGeminiQuotaReqBody(),
-      { appendGoogleAtToken: true },
+      { appendGoogleAtToken: true, timeoutMs: GEMINI_POST_TIMEOUT_MS },
     );
   } else {
     body = await fetchViaWindow(opts.probeUrl, {
