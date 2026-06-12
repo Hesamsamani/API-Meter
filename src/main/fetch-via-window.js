@@ -13,6 +13,8 @@ const {
 } = require('../shared/gemini-usage-page');
 const { PARTITION } = require('./provider-session');
 
+const GEMINI_ORIGIN = 'https://gemini.google.com/';
+
 const BLOCKED_SIGNATURES = [
   { pattern: 'Just a moment', error: 'CloudflareBlocked' },
   { pattern: 'Enable JavaScript and cookies to continue', error: 'CloudflareChallenge' },
@@ -335,10 +337,6 @@ function fetchMultipleViaWindow(urls, { timeoutMs = 10000, expectJson = true, pa
   });
 }
 
-/**
- * Load the official Gemini /usage page and collect quota UI data.
- * @param {{ timeoutMs?: number, partition?: string, pollMs?: number }} [options]
- */
 /**
  * Confirm pasted/imported cookies can load an authenticated Gemini page (SNlM0e present).
  * @param {{ timeoutMs?: number, partition?: string }} [options]

@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   parseResponseBody,
   postViaWindow,
@@ -8,6 +11,11 @@ import {
   verifyGeminiPageSession,
   GEMINI_USAGE_PAGE_URL,
 } from '../../src/main/fetch-via-window.js';
+
+const fetchViaWindowSrc = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../../src/main/fetch-via-window.js'),
+  'utf8',
+);
 
 test('parseResponseBody parses valid JSON', () => {
   const data = parseResponseBody('{"ok":true}');
@@ -27,6 +35,10 @@ test('geminiLoadCandidates prioritizes official usage page', () => {
 
 test('verifyGeminiPageSession is exported for cookie paste verification', () => {
   assert.equal(typeof verifyGeminiPageSession, 'function');
+});
+
+test('verifyGeminiPageSession defines GEMINI_ORIGIN in fetch-via-window module', () => {
+  assert.match(fetchViaWindowSrc, /const GEMINI_ORIGIN = 'https:\/\/gemini\.google\.com\/'/);
 });
 
 test('waitForGeminiTokens is exported for gemini quota polling', () => {
