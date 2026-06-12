@@ -45,6 +45,19 @@ test('extractGeminiPageTokens reads SNlM0e, FdrFJe, and bl from page HTML', () =
   assert.match(tokens.bl, /boq_assistant-bard-web-server_/);
 });
 
+test('extractGeminiPageTokens reads escaped SNlM0e from script payloads', () => {
+  const html = 'SNlM0e\\":\\"token-from-script\\",\\"FdrFJe\\":\\"9876543210\\"';
+  const tokens = extractGeminiPageTokens(html);
+  assert.equal(tokens.at, 'token-from-script');
+  assert.equal(tokens.sid, '9876543210');
+});
+
+test('extractGeminiPageTokens finds bl in cfb2h field', () => {
+  const html = '"cfb2h":"boq_assistant-bard-web-server_20260301.00_p0"';
+  const tokens = extractGeminiPageTokens(html);
+  assert.match(tokens.bl, /boq_assistant-bard-web-server_20260301/);
+});
+
 test('extractGeminiQuota parses nested numeric pair arrays', () => {
   const quota = extractGeminiQuota([null, [12, 1000]]);
   assert.equal(quota.dayUsed, 12);

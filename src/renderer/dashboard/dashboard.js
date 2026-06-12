@@ -7,6 +7,10 @@ import {
   PROVIDER_META,
   formatCountdown,
   isLoginRequired,
+  isStaleSnapshot,
+  isRetryableError,
+  isGeminiSessionError,
+  sourceBadge,
   worstUtil,
 } from '../shared/provider-card.js';
 import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
@@ -194,12 +198,16 @@ async function refreshDetail(snapshot) {
   }
   lastDetailFingerprint = fp;
 
+  const badge = sourceBadge(snapshot);
+  const stale = isStaleSnapshot(snapshot);
+
   detailBody.innerHTML = `
       <div class="detail-meta">
-        Source: <strong>${(snapshot.source || 'unknown').toUpperCase()}</strong><br>
+        Source: <strong class="badge ${badge.cls}">${badge.text}</strong><br>
         Plan: ${snapshot.plan || '—'}<br>
         Fetched: ${fetched}
-        ${snapshot.error ? `<br><span style="color:var(--red)">${snapshot.error}</span>` : ''}
+        ${stale ? `<div class="detail-stale-warning">${snapshot.error}</div>` : ''}
+        ${snapshot.error && !stale ? `<br><span class="detail-error">${snapshot.error}</span>` : ''}
       </div>
       <div id="detail-bars">
         ${windows.length ? windows.map((w) => `
@@ -217,15 +225,18 @@ async function refreshDetail(snapshot) {
       </div>
       <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
       <div class="detail-actions">
-        ${isLoginRequired(snapshot) ? `<button type="button" id="detail-login">Re-login</button>` : ''}
-        ${snapshot.error && !isLoginRequired(snapshot) ? `<button type="button" id="detail-retry">Retry</button>` : ''}
-        ${!isLoginRequired(snapshot) && snapshot.windows?.length ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
+        ${isLoginRequired(snapshot) || isGeminiSessionError(snapshot) ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+        ${isRetryableError(snapshot) ? `<button type="button" id="detail-retry">Retry</button>` : ''}
+        ${!isLoginRequired(snapshot) && snapshot.windows?.length && !stale ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
         <button type="button" id="detail-refresh">Refresh</button>
       </div>
     `;
 
     document.getElementById('detail-refresh')?.addEventListener('click', () => {
       window.apiMeter.refreshProvider(snapshot.providerId);
+    });
+    document.getElementById('detail-retry')?.addEventListener('click', () => {
+      handleRetry(snapshot.providerId);
     });
     document.getElementById('detail-login')?.addEventListener('click', () => {
       handleLogin(snapshot.providerId);
@@ -276,7 +287,14 @@ async function renderHistoryChart(providerId) {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          labels: { color: '#6b6b70', font: { family: 'DM Mono', size: 9 }, boxWidth: 12 },
+          position: 'bottom',
+          align: 'start',
+          labels: {
+            color: '#6b6b70',
+            font: { family: 'DM Mono', size: 9 },
+            boxWidth: 10,
+            padding: 8,
+          },
         },
       },
       scales: {

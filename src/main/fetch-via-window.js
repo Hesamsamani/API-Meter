@@ -3,7 +3,10 @@
  */
 const { BrowserWindow } = require('electron');
 const { CHROME_UA } = require('../shared/ua');
-const { extractGeminiPageTokens } = require('../shared/gemini-page-tokens');
+const {
+  extractGeminiPageTokens,
+  GEMINI_PAGE_SOURCE_COLLECTOR,
+} = require('../shared/gemini-page-tokens');
 const { PARTITION } = require('./provider-session');
 
 const BLOCKED_SIGNATURES = [
@@ -115,6 +118,29 @@ function fetchViaWindow(url, { timeoutMs = 30000, expectJson = true, partition =
  * @param {string} body - application/x-www-form-urlencoded body
  * @param {{ timeoutMs?: number, partition?: string, appendGoogleAtToken?: boolean }} [options]
  */
+function geminiLoadCandidates(originUrl) {
+  const base = originUrl.replace(/\/?$/, '');
+  return [...new Set([`${base}/`, `${base}/app`, originUrl])];
+}
+
+async function collectGeminiPageSource(win) {
+  if (!win || win.isDestroyed()) return '';
+  return win.webContents.executeJavaScript(GEMINI_PAGE_SOURCE_COLLECTOR);
+}
+
+async function waitForGeminiTokens(win, { timeoutMs = 15000, pollMs = 400 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let last = { at: null, sid: null, bl: null };
+  while (Date.now() < deadline) {
+    if (win.isDestroyed()) break;
+    const html = await collectGeminiPageSource(win);
+    last = extractGeminiPageTokens(html);
+    if (last.at) return last;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  return last;
+}
+
 function postViaWindow(
   originUrl,
   postUrl,
@@ -124,7 +150,9 @@ function postViaWindow(
   return new Promise((resolve, reject) => {
     const win = createFetchWindow({ partition });
     let settled = false;
-    let posted = false;
+    let posting = false;
+    let loadIndex = 0;
+    const loadUrls = appendGoogleAtToken ? geminiLoadCandidates(originUrl) : [originUrl];
 
     const finish = (fn, value) => {
       if (settled) return;
@@ -137,29 +165,40 @@ function postViaWindow(
     const timeout = setTimeout(() => finish(reject, new Error('Request timeout')), timeoutMs);
 
     const runPost = async () => {
-      if (posted || win.isDestroyed() || win.webContents.isLoading()) return;
+      if (posting || settled || win.isDestroyed() || win.webContents.isLoading()) return;
       const currentUrl = win.webContents.getURL();
       if (!urlLooksReady(currentUrl, originUrl)) return;
 
-      posted = true;
+      posting = true;
       try {
+        let tokens = { at: null, sid: null, bl: null };
+        if (appendGoogleAtToken) {
+          tokens = await waitForGeminiTokens(win, { timeoutMs: Math.min(15000, timeoutMs - 2000) });
+          if (!tokens.at && loadIndex < loadUrls.length - 1) {
+            posting = false;
+            loadIndex += 1;
+            win.loadURL(loadUrls[loadIndex]);
+            return;
+          }
+        }
+
+        if (appendGoogleAtToken && !tokens.at) {
+          finish(reject, new Error('Gemini page token missing (SNlM0e) — open gemini.google.com while signed in'));
+          return;
+        }
+
         const responseText = await win.webContents.executeJavaScript(
           `(async () => {
-            const extractTokens = ${extractGeminiPageTokens.toString()};
             let postBody = ${JSON.stringify(body)};
             let requestUrl = ${JSON.stringify(postUrl)};
             if (${appendGoogleAtToken}) {
-              const html = document.documentElement.innerHTML;
-              const { at, sid, bl } = extractTokens(html);
-              if (at && !postBody.includes('at=')) {
-                postBody += '&at=' + encodeURIComponent(at);
-              }
-              if (!at) {
-                throw new Error('Gemini page token missing (SNlM0e) — open gemini.google.com while signed in');
+              const tokens = ${JSON.stringify(tokens)};
+              if (tokens.at && !postBody.includes('at=')) {
+                postBody += '&at=' + encodeURIComponent(tokens.at);
               }
               const url = new URL(requestUrl);
-              if (sid && !url.searchParams.has('f.sid')) url.searchParams.set('f.sid', sid);
-              if (bl && !url.searchParams.has('bl')) url.searchParams.set('bl', bl);
+              if (tokens.sid && !url.searchParams.has('f.sid')) url.searchParams.set('f.sid', tokens.sid);
+              if (tokens.bl && !url.searchParams.has('bl')) url.searchParams.set('bl', tokens.bl);
               if (!url.searchParams.has('hl')) url.searchParams.set('hl', 'en');
               requestUrl = url.toString();
             }
@@ -192,10 +231,7 @@ function postViaWindow(
       finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
     });
 
-    const loadUrl = appendGoogleAtToken && !originUrl.includes('/app')
-      ? originUrl.replace(/\/?$/, '/app')
-      : originUrl;
-    win.loadURL(loadUrl);
+    win.loadURL(loadUrls[loadIndex]);
   });
 }
 
@@ -268,4 +304,7 @@ module.exports = {
   fetchMultipleViaWindow,
   parseResponseBody,
   createFetchWindow,
+  collectGeminiPageSource,
+  waitForGeminiTokens,
+  geminiLoadCandidates,
 };

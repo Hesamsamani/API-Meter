@@ -55,6 +55,19 @@ function isLoginRequired(snapshot) {
   return isAuthErrorMessage(snapshot.error || '');
 }
 
+function isStaleSnapshot(snapshot) {
+  return !!(snapshot?.error && snapshot.windows?.length);
+}
+
+function isRetryableError(snapshot) {
+  return !!(snapshot?.error && !isLoginRequired(snapshot));
+}
+
+function isGeminiSessionError(snapshot) {
+  const err = String(snapshot?.error || '');
+  return /SNlM0e|page token missing|gemini\.google\.com/i.test(err);
+}
+
 function statusClass(snapshot) {
   if (isLoginRequired(snapshot)) return 'error';
   if (snapshot?.error && !snapshot.windows?.length) return 'error';
@@ -119,7 +132,7 @@ function staleErrorHtml(snapshot, { onRetry } = {}) {
 
 function bindEmptyCardActions(el, snapshot, { onLogin, onRetry } = {}) {
   const needsLogin = isLoginRequired(snapshot);
-  const hasError = snapshot?.error && !needsLogin;
+  const hasError = isRetryableError(snapshot);
 
   const loginBtn = el.querySelector('.login-btn');
   if (needsLogin && onLogin && loginBtn && !loginBtn.dataset.bound) {
@@ -206,7 +219,7 @@ function bindStaleErrorActions(el, snapshot, { onRetry } = {}) {
 
 function buildEmptyCard(meta, snapshot, { onLogin, onRetry } = {}) {
   const needsLogin = isLoginRequired(snapshot);
-  const hasError = snapshot?.error && !needsLogin;
+  const hasError = isRetryableError(snapshot);
   let emptyContent = '<p>Awaiting data…</p>';
 
   if (needsLogin) {
@@ -258,7 +271,7 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry, ga
 
   if (nowEmpty) {
     const needsLogin = isLoginRequired(snapshot);
-    const hasError = snapshot?.error && !needsLogin;
+    const hasError = isRetryableError(snapshot);
     const wantsLoginBtn = needsLogin && !!onLogin;
     const wantsRetryBtn = hasError && !!onRetry;
     const hadLoginBtn = !!el.querySelector('.login-btn');
@@ -359,7 +372,7 @@ export function renderSnapshotRow(snapshot, { onLogin, onRetry } = {}) {
 
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
-  const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
+  const hasRetryableError = isRetryableError(snapshot);
   const util = worstDisplayPercent(snapshot);
   const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
@@ -408,7 +421,7 @@ export function renderSnapshotRow(snapshot, { onLogin, onRetry } = {}) {
 export function updateSnapshotRow(el, snapshot, { onLogin, onRetry } = {}) {
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
-  const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
+  const hasRetryableError = isRetryableError(snapshot);
   const util = worstDisplayPercent(snapshot);
   const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
@@ -469,4 +482,16 @@ export function renderSkeletonCard() {
   return el;
 }
 
-export { PROVIDER_META, ORDER, worstUtil, formatCountdown, isLoginRequired, cardShowsEmpty, statusClass };
+export {
+  PROVIDER_META,
+  ORDER,
+  worstUtil,
+  formatCountdown,
+  isLoginRequired,
+  isStaleSnapshot,
+  isRetryableError,
+  isGeminiSessionError,
+  sourceBadge,
+  cardShowsEmpty,
+  statusClass,
+};

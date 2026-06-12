@@ -1,4 +1,4 @@
-import { PROVIDER_META, isLoginRequired } from './provider-card.js';
+import { PROVIDER_META, isLoginRequired, isRetryableError } from './provider-card.js';
 import { thresholdClass } from './alert-thresholds.js';
 import {
   displayFillPercent,
@@ -230,7 +230,7 @@ export function renderConcentricOrb(snap, { sizeKey = 'medium' } = {}) {
 export function renderOrbCluster(snap, { sizeKey = 'medium', onLogin, onRetry } = {}) {
   const hasWindows = (snap.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snap);
-  const hasRetryableError = snap?.error && !hasWindows && !needsLogin;
+  const hasRetryableError = isRetryableError(snap);
 
   const cluster = document.createElement('div');
   cluster.className = 'widget-orb-cluster';

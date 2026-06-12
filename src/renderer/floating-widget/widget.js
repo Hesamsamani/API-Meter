@@ -6,6 +6,7 @@ import {
   worstUtil,
   getVisibleOrder,
   isLoginRequired,
+  isRetryableError,
 } from '../shared/provider-card.js';
 import {
   renderOrbCluster,
@@ -218,7 +219,7 @@ function renderCompactRow(snap) {
   const meta = PROVIDER_META[snap.providerId] || { label: snap.providerId, accent: 'var(--muted)' };
   const hasWindows = (snap.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snap);
-  const hasRetryableError = snap?.error && !hasWindows && !needsLogin;
+  const hasRetryableError = isRetryableError(snap);
   const util = worstDisplayPercent(snap);
   const colorUtil = worstUtil(snap);
   const row = document.createElement('div');
@@ -229,7 +230,7 @@ function renderCompactRow(snap) {
   row.innerHTML = `
     <span class="widget-compact-name">${meta.label}</span>
     <span class="widget-compact-stats">${hasWindows
-      ? snap.windows.slice(0, 2).map((w) => formatWindowPercentShort(w)).join(' · ')
+      ? [snap.windows.slice(0, 2).map((w) => formatWindowPercentShort(w)).join(' · '), snap.error || ''].filter(Boolean).join(' · ')
       : (needsLogin ? (snap.error || 'Login required') : (snap.error || '—'))}</span>
     <span class="widget-compact-pct th-${hasWindows ? thresholdClass(colorUtil) : 'muted'}">${hasWindows ? `${util}%` : '—'}</span>
   `;
