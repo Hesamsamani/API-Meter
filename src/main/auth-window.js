@@ -51,14 +51,22 @@ function closePrompt() {
   if (win && !win.isDestroyed()) win.close();
 }
 
+function minimizeAuthPrompt() {
+  const win = activePrompt?.win;
+  if (win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()) {
+    win.minimize();
+  }
+}
+
 function createAuthPromptWindow(opts) {
+  const external = !!opts.externalBrowser;
   const win = new BrowserWindow({
-    width: 440,
-    height: 540,
+    width: external ? 400 : 440,
+    height: external ? 460 : 540,
     show: false,
     resizable: false,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: !external,
     backgroundColor: '#0a0a0b',
     webPreferences: {
       preload: getPreloadPath(),
@@ -71,14 +79,14 @@ function createAuthPromptWindow(opts) {
   win.loadFile(path.join(__dirname, '../renderer/auth-prompt/index.html'));
   win.once('ready-to-show', () => {
     win.show();
-    const external = !!opts.externalBrowser;
+    if (external) win.setAlwaysOnTop(false);
     sendPrompt('auth-prompt:init', {
       title: opts.title,
       description: external
         ? 'Google blocks in-app sign-in. Use Chrome or Edge, then import cookies.'
         : 'Sign in with the in-app browser, or paste cookies copied from your browser.',
       status: external
-        ? 'Open Chrome, sign in, then click Import from browser.'
+        ? 'Chrome will open — this window minimizes so you can sign in. Restore it from the taskbar when done.'
         : 'Waiting for in-app sign-in…',
       mode: 'waiting',
       cookieNameHint: cookieHint,
@@ -219,7 +227,7 @@ async function tryCaptureInAppCookie(opts) {
 
 function waitingMessage(external = false) {
   return external
-    ? 'Sign in in Chrome or Edge, then click Import from browser.'
+    ? 'Sign in in Chrome or Edge, then restore this window from the taskbar and click Import from browser.'
     : 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
 }
 
@@ -270,9 +278,10 @@ async function openExternalLogin(session) {
   session.preferredBrowser = result.browser === 'default' ? null : result.browser;
   const label = result.browser === 'default' ? 'your default browser' : result.browser;
   sendPrompt('auth-prompt:status', {
-    status: `Opened ${label}. Sign in, then click Import from browser.`,
+    status: `Opened ${label}. Sign in there, then restore API-Meter from the taskbar and click Import from browser.`,
     mode: 'waiting',
   });
+  setTimeout(() => minimizeAuthPrompt(), 400);
   return result;
 }
 
@@ -394,7 +403,14 @@ function registerPromptHandlers(session) {
     },
     'auth-prompt:open-external': async () => {
       session.tab = 'external';
+      if (activePrompt?.win && !activePrompt.win.isDestroyed()) {
+        activePrompt.win.restore();
+        activePrompt.win.show();
+      }
       await openExternalLogin(session);
+    },
+    'auth-prompt:minimize': () => {
+      minimizeAuthPrompt();
     },
     'auth-prompt:import-browser': async () => {
       sendPrompt('auth-prompt:status', { status: 'Reading cookies from Chrome/Edge…', mode: 'waiting' });
@@ -511,20 +527,12 @@ function openAuthWindowInner(opts) {
         }
         return;
       }
-      if (session.tab === 'external' && external) {
-        session.polling = true;
-        try {
-          const hit = await tryImportFromSystemBrowser(session, { quiet: true });
-          if (!isSessionActive(session) || !hit) return;
-          await completeLoginWithVerification(session, hit);
-        } finally {
-          session.polling = false;
-        }
-      }
     };
 
-    session.timer = setInterval(() => { poll().catch(() => {}); }, external ? 3000 : 1500);
-    if (!external) poll().catch(() => {});
+    if (!external) {
+      session.timer = setInterval(() => { poll().catch(() => {}); }, 1500);
+      poll().catch(() => {});
+    }
 
     win.on('closed', () => {
       if (activePrompt?.session === session) activePrompt = null;

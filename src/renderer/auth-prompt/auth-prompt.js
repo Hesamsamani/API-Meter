@@ -147,6 +147,10 @@ document.getElementById('auth-open-external')?.addEventListener('click', () => {
   window.apiMeter.openExternalAuth?.();
 });
 
+document.getElementById('auth-minimize-external')?.addEventListener('click', () => {
+  window.apiMeter.minimizeAuthPrompt?.();
+});
+
 document.getElementById('auth-import-browser')?.addEventListener('click', () => {
   setStatus('Reading cookies from Chrome/Edge…', 'waiting');
   window.apiMeter.importBrowserCookies?.();

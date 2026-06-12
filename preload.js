@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   readClipboardCookies: () => ipcRenderer.invoke('auth-prompt:read-clipboard'),
   openExternalAuth: () => ipcRenderer.invoke('auth-prompt:open-external'),
   importBrowserCookies: () => ipcRenderer.invoke('auth-prompt:import-browser'),
+  minimizeAuthPrompt: () => ipcRenderer.invoke('auth-prompt:minimize'),
   onAuthPromptInit: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('auth-prompt:init', listener);

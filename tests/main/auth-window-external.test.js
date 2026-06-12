@@ -15,6 +15,9 @@ test('gemini auth uses external Chrome flow instead of embedded Google OAuth', (
   assert.match(authSrc, /readBrowserCookie/);
   assert.match(authSrc, /auth-prompt:import-browser/);
   assert.match(authSrc, /Google blocked in-app sign-in/);
+  assert.match(authSrc, /alwaysOnTop:\s*!external/);
+  assert.match(authSrc, /minimizeAuthPrompt/);
+  assert.doesNotMatch(authSrc, /external \? 3000 : 1500/);
 });
 
 test('auth prompt supports external browser tab', () => {
