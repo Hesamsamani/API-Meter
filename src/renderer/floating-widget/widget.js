@@ -7,6 +7,7 @@ import {
   getVisibleOrder,
   isLoginRequired,
   isRetryableError,
+  isGeminiSessionError,
 } from '../shared/provider-card.js';
 import {
   renderOrbCluster,
@@ -89,6 +90,26 @@ function handleLogin(providerId) {
   });
 }
 
+function handleReset(providerId) {
+  window.apiMeter.resetProvider(providerId).catch((err) => {
+    console.error('Reset failed:', err);
+  });
+}
+
+function shouldResetGeminiAuth(snap) {
+  return snap?.providerId === 'gemini'
+    && (isGeminiSessionError(snap) || (isLoginRequired(snap) && snap.refreshFailed));
+}
+
+function handleAuth(providerId) {
+  const snap = placeholderSnap(providerId);
+  if (shouldResetGeminiAuth(snap)) {
+    handleReset(providerId);
+    return;
+  }
+  handleLogin(providerId);
+}
+
 function handleRetry(providerId) {
   window.apiMeter.refreshProvider(providerId).catch((err) => {
     console.error('Refresh failed:', err);
@@ -101,7 +122,7 @@ function gaugeOptions() {
 
 function cardHandlers(id) {
   return {
-    onLogin: () => handleLogin(id),
+    onLogin: () => handleAuth(id),
     onRetry: () => handleRetry(id),
     gauge: gaugeOptions(),
   };
@@ -110,7 +131,7 @@ function cardHandlers(id) {
 function orbHandlers(id) {
   return {
     sizeKey: widgetConfig().size,
-    onLogin: () => handleLogin(id),
+    onLogin: () => handleAuth(id),
     onRetry: () => handleRetry(id),
   };
 }
@@ -235,8 +256,8 @@ function renderCompactRow(snap) {
     <span class="widget-compact-pct th-${hasWindows ? thresholdClass(colorUtil) : 'muted'}">${hasWindows ? `${util}%` : '—'}</span>
   `;
   if (needsLogin) {
-    row.title = 'Click to connect';
-    row.addEventListener('click', () => handleLogin(snap.providerId));
+    row.title = shouldResetGeminiAuth(snap) ? 'Click to reset & sign in' : 'Click to connect';
+    row.addEventListener('click', () => handleAuth(snap.providerId));
   } else if (hasRetryableError) {
     row.title = 'Click to retry';
     row.addEventListener('click', () => handleRetry(snap.providerId));

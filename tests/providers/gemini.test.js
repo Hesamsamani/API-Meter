@@ -12,6 +12,7 @@ import {
   GEMINI_POST_TIMEOUT_MS,
   GEMINI_USAGE_PAGE_URL,
   buildGeminiQuotaBatchUrl,
+  GEMINI_COOKIE_NAMES,
 } from '../../src/providers/gemini.js';
 
 const geminiSrc = readFileSync(
@@ -23,6 +24,13 @@ import { extractGeminiPageTokens } from '../../src/shared/gemini-page-tokens.js'
 test('fetchLiveGemini uses shared GEMINI_POST_TIMEOUT_MS', () => {
   assert.equal(GEMINI_POST_TIMEOUT_MS, 75000);
   assert.match(geminiSrc, /timeoutMs:\s*GEMINI_POST_TIMEOUT_MS/);
+});
+
+test('gemini adapter exposes reset that purges google cookies and reopens auth', () => {
+  assert.ok(GEMINI_COOKIE_NAMES.includes('__Secure-1PSID'));
+  assert.match(geminiSrc, /async reset\(\)/);
+  assert.match(geminiSrc, /purgeAllGoogleCookies:\s*true/);
+  assert.match(geminiSrc, /loginUrl:\s*GEMINI_USAGE_PAGE_URL/);
 });
 
 test('fetchLiveGemini prefers official usage page then batchexecute fallback', () => {

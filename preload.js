@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   refreshProvider: (id) => ipcRenderer.invoke('usage:refreshProvider', id),
   loginProvider: (id) => ipcRenderer.invoke('provider:login', id),
   logoutProvider: (id) => ipcRenderer.invoke('provider:logout', id),
+  resetProvider: (id) => ipcRenderer.invoke('provider:reset', id),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   openSettings: () => ipcRenderer.invoke('app:showSettings'),

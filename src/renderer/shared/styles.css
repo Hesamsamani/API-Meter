@@ -648,6 +648,11 @@ body::before {
   color: var(--red);
 }
 .detail-actions button.danger:hover { background: rgba(239, 68, 68, 0.08); }
+.detail-actions button.warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--amber, #f59e0b);
+}
+.detail-actions button.warning:hover { background: rgba(245, 158, 11, 0.08); }
 
 /* ── Settings ── */
 .settings-shell {

@@ -133,6 +133,14 @@ function buildContextMenu(handlers) {
       {
         label,
         submenu: [
+          ...(id === 'gemini' ? [{
+            label: 'Reset & sign in',
+            click: () => {
+              Promise.resolve(handlers.onProviderReset?.(id)).catch((err) => {
+                console.error(`Reset failed for ${id}:`, err);
+              });
+            },
+          }] : []),
           {
             label: 'Re-login',
             click: () => {

@@ -17,7 +17,8 @@ test('widget resize handlers pass provider count to IPC', () => {
 });
 
 test('widget passes onLogin and gauge options to provider cards', () => {
-  assert.match(widgetSrc, /onLogin:\s*\(\)\s*=>\s*handleLogin/);
+  assert.match(widgetSrc, /onLogin:\s*\(\)\s*=>\s*handleAuth/);
+  assert.match(widgetSrc, /shouldResetGeminiAuth/);
   assert.match(widgetSrc, /gauge:\s*gaugeOptions\(\)/);
   assert.match(widgetSrc, /SIZE_GAUGE/);
 });

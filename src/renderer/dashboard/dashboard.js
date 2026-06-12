@@ -68,6 +68,12 @@ function handleRetry(providerId) {
   });
 }
 
+function handleReset(providerId) {
+  window.apiMeter.resetProvider(providerId).catch((err) => {
+    console.error('Reset failed:', err);
+  });
+}
+
 function syncAutoRefreshButton() {
   if (!btnAutoRefresh) return;
   const on = appSettings.autoRefreshEnabled !== false;
@@ -226,6 +232,7 @@ async function refreshDetail(snapshot) {
       <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
       <div class="detail-actions">
         ${isLoginRequired(snapshot) || isGeminiSessionError(snapshot) ? `<button type="button" id="detail-login">Re-login</button>` : ''}
+        ${snapshot.providerId === 'gemini' ? `<button type="button" id="detail-reset" class="warning">Reset & sign in</button>` : ''}
         ${isRetryableError(snapshot) ? `<button type="button" id="detail-retry">Retry</button>` : ''}
         ${!isLoginRequired(snapshot) && snapshot.windows?.length && !stale ? `<button type="button" id="detail-disconnect" class="danger">Disconnect</button>` : ''}
         <button type="button" id="detail-refresh">Refresh</button>
@@ -240,6 +247,9 @@ async function refreshDetail(snapshot) {
     });
     document.getElementById('detail-login')?.addEventListener('click', () => {
       handleLogin(snapshot.providerId);
+    });
+    document.getElementById('detail-reset')?.addEventListener('click', () => {
+      handleReset(snapshot.providerId);
     });
     document.getElementById('detail-disconnect')?.addEventListener('click', () => {
       handleLogout(snapshot.providerId);

@@ -14,7 +14,34 @@ const { getSecret } = require('../main/store');
 const AI_PRO_DAILY_LIMIT = 1000;
 const GEMINI_POST_TIMEOUT_MS = 75000;
 const GEMINI_ORIGIN = 'https://gemini.google.com/';
+const GEMINI_COOKIE_NAMES = ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'];
 const GEMINI_QUOTA_BATCH_URL = 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b&rt=c&source-path=%2Fusage';
+
+function geminiAuthWindowOptions() {
+  return {
+    providerId: 'gemini',
+    loginUrl: GEMINI_USAGE_PAGE_URL,
+    domain: '.google.com',
+    cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
+    secretKey: 'gemini-session',
+    title: 'Login to Gemini',
+    probeUrl: 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
+    probeExpectJson: false,
+  };
+}
+
+async function clearGeminiAuthState({ disconnect = true, purgeAllGoogleCookies = false } = {}) {
+  const { setSecret, setProviderDisconnected } = require('../main/store');
+  const { clearProviderCookies, flushCookies, getProviderSession } = require('../main/provider-session');
+  setSecret('gemini-session', '');
+  setSecret('gemini-session-cookie-name', '');
+  setProviderDisconnected('gemini', disconnect);
+  await clearProviderCookies({
+    domain: '.google.com',
+    names: purgeAllGoogleCookies ? [] : GEMINI_COOKIE_NAMES,
+  });
+  await flushCookies(getProviderSession());
+}
 
 function buildGeminiQuotaBatchUrl() {
   return `${GEMINI_QUOTA_BATCH_URL}&_reqid=${Date.now()}`;
@@ -298,27 +325,14 @@ function createGeminiAdapter() {
     async login() {
       const { setProviderDisconnected } = require('../main/store');
       setProviderDisconnected('gemini', false);
-      await openAuthWindow({
-        providerId: 'gemini',
-        loginUrl: 'https://gemini.google.com/',
-        domain: '.google.com',
-        cookieNames: ['__Secure-1PSID', '__Secure-3PSID', 'SID'],
-        secretKey: 'gemini-session',
-        title: 'Login to Gemini',
-        probeUrl: 'https://gemini.google.com/_/BardChatUi/data/batchexecute?rpcids=otAQ7b',
-        probeExpectJson: false,
-      });
+      await openAuthWindow(geminiAuthWindowOptions());
     },
     async logout() {
-      const { setSecret, setProviderDisconnected } = require('../main/store');
-      const { clearProviderCookies } = require('../main/provider-session');
-      setSecret('gemini-session', '');
-      setSecret('gemini-session-cookie-name', '');
-      await clearProviderCookies({
-        domain: '.google.com',
-        names: ['__Secure-1PSID', '__Secure-3PSID', 'SID', '__Secure-1PSIDTS', '__Secure-1PSIDCC'],
-      });
-      setProviderDisconnected('gemini', true);
+      await clearGeminiAuthState({ disconnect: true, purgeAllGoogleCookies: false });
+    },
+    async reset() {
+      await clearGeminiAuthState({ disconnect: false, purgeAllGoogleCookies: true });
+      await openAuthWindow(geminiAuthWindowOptions());
     },
     async fetchUsage() {
       const { isProviderDisconnected } = require('../main/store');
@@ -352,4 +366,7 @@ module.exports = {
   buildGeminiQuotaBatchUrl,
   fetchGeminiFromUsagePage,
   fetchGeminiFromBatchExecute,
+  clearGeminiAuthState,
+  geminiAuthWindowOptions,
+  GEMINI_COOKIE_NAMES,
 };

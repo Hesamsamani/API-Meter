@@ -211,6 +211,37 @@ function registerIpc() {
     broadcastUsage();
     return store.getAll();
   });
+  ipcMain.handle('provider:reset', async (_e, id) => {
+    const adapter = registry.get(id);
+    if (!adapter?.reset) throw new Error(`Provider ${id} has no reset flow`);
+    store.setSnapshot(id, {
+      providerId: id,
+      source: 'stale',
+      plan: null,
+      windows: [],
+      fetchedAt: new Date().toISOString(),
+      error: 'Login required — complete sign-in',
+      authRequired: true,
+    });
+    broadcastUsage();
+    try {
+      await adapter.reset();
+      await scheduler.refreshProviderAndReschedule(adapter);
+      broadcastUsage();
+      return store.getAll();
+    } catch (err) {
+      const { applied, message } = applyProviderLoginFailure({
+        providerId: id,
+        error: err,
+        store,
+        onUsageBroadcast: broadcastUsage,
+      });
+      if (applied && Notification.isSupported()) {
+        new Notification({ title: 'Gemini reset failed', body: message }).show();
+      }
+      throw err;
+    }
+  });
   ipcMain.handle('settings:get', () => settings.store);
   ipcMain.handle('settings:update', (_e, patch) => {
     applySettingsPatch(patch || {});
@@ -429,6 +460,36 @@ app.whenReady().then(() => {
         if (Notification.isSupported()) {
           new Notification({ title: 'Disconnect failed', body: err.message || String(err) }).show();
         }
+      }
+    },
+    onProviderReset: async (id) => {
+      const adapter = registry.get(id);
+      if (!adapter?.reset) return;
+      store.setSnapshot(id, {
+        providerId: id,
+        source: 'stale',
+        plan: null,
+        windows: [],
+        fetchedAt: new Date().toISOString(),
+        error: 'Login required — complete sign-in',
+        authRequired: true,
+      });
+      broadcastUsage();
+      try {
+        await adapter.reset();
+        await scheduler.refreshProviderAndReschedule(adapter);
+        broadcastUsage();
+      } catch (err) {
+        const { applied, message } = applyProviderLoginFailure({
+          providerId: id,
+          error: err,
+          store,
+          onUsageBroadcast: broadcastUsage,
+        });
+        if (applied && Notification.isSupported()) {
+          new Notification({ title: 'Reset failed', body: message }).show();
+        }
+        throw err;
       }
     },
     onQuit: () => app.quit(),
