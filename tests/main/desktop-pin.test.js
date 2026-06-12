@@ -15,6 +15,11 @@ test('desktop-pin uses WorkerW spawn and SetParent', () => {
   assert.match(pinSrc, /pinWidgetToDesktop/);
   assert.match(pinSrc, /koffi\.as\(hwnd, 'void \*'\)/);
   assert.match(pinSrc, /readBigUInt64LE/);
+  assert.match(pinSrc, /FindWindowExW\(asHwnd\(progman\), null, 'WorkerW'/);
+  assert.match(pinSrc, /Never parent to Progman/);
+  assert.match(pinSrc, /SetWindowPos/);
+  assert.match(pinSrc, /ShowWindow/);
+  assert.match(pinSrc, /ScreenToClient/);
 });
 
 test('floating widget is pinned on show and click-through changes', () => {

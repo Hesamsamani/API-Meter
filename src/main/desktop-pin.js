@@ -6,6 +6,10 @@ const { platform } = require('process');
 
 const WM_SPAWN_WORKER = 0x052c;
 const SMTO_NORMAL = 0;
+const HWND_TOP = 0n;
+const SW_SHOW = 5;
+const SWP_SHOWWINDOW = 0x0040;
+const SWP_NOACTIVATE = 0x0010;
 
 let koffi = null;
 let lib = null;
@@ -37,6 +41,10 @@ function loadApi() {
       SetParent: lib.func('SetParent', 'void *', ['void *', 'void *']),
       IsWindow: lib.func('IsWindow', 'bool', ['void *']),
       EnumWindows: lib.func('EnumWindows', 'bool', [koffi.pointer(EnumWindowsProc), 'intptr']),
+      ShowWindow: lib.func('ShowWindow', 'bool', ['void *', 'int']),
+      SetWindowPos: lib.func('SetWindowPos', 'bool', ['void *', 'void *', 'int', 'int', 'int', 'int', 'uint']),
+      ScreenToClient: lib.func('ScreenToClient', 'bool', ['void *', 'void *']),
+      IsWindowVisible: lib.func('IsWindowVisible', 'bool', ['void *']),
     };
     return api;
   } catch (err) {
@@ -49,49 +57,84 @@ function isDesktopPinSupported() {
   return !!loadApi();
 }
 
+function spawnDesktopWorker(user32, progman) {
+  const resultPtr = koffi.alloc('uintptr', 1);
+  // Legacy + Win10/11 spawn variants — harmless if one is ignored by the shell.
+  user32.SendMessageTimeoutW(asHwnd(progman), WM_SPAWN_WORKER, 0, 0, SMTO_NORMAL, 1000, resultPtr);
+  user32.SendMessageTimeoutW(asHwnd(progman), WM_SPAWN_WORKER, 0xd, 1, SMTO_NORMAL, 1000, resultPtr);
+}
+
+function findDesktopWorkerW() {
+  const user32 = loadApi();
+  if (!user32) return null;
+
+  const progman = user32.FindWindowW('Progman', null);
+  if (!progman) return null;
+
+  spawnDesktopWorker(user32, progman);
+
+  // Win11: WorkerW is often a child of Progman (not a top-level sibling).
+  let workerW = user32.FindWindowExW(asHwnd(progman), null, 'WorkerW', null);
+
+  if (!workerW) {
+    let sibling = null;
+    const callback = koffi.register((hwnd) => {
+      const shellView = user32.FindWindowExW(asHwnd(hwnd), null, 'SHELLDLL_DefView', null);
+      if (!shellView) return true;
+      const next = user32.FindWindowExW(null, asHwnd(hwnd), 'WorkerW', null);
+      if (next) sibling = next;
+      return true;
+    }, koffi.pointer(EnumWindowsProc));
+
+    user32.EnumWindows(callback, 0);
+    koffi.unregister(callback);
+    workerW = sibling;
+  }
+
+  if (!workerW) {
+    workerW = user32.FindWindowW('WorkerW', null);
+  }
+
+  // Never parent to Progman — that hides the widget behind SHELLDLL_DefView icons.
+  if (!workerW || workerW === progman || !user32.IsWindow(asHwnd(workerW))) return null;
+  return workerW;
+}
+
 function readHwndFromBuffer(buf) {
   if (!buf || buf.length < 4) return null;
   const ptr = buf.length >= 8 ? buf.readBigUInt64LE(0) : BigInt(buf.readUInt32LE(0));
   return ptr === 0n ? null : ptr;
 }
 
-function findDesktopWorkerW(user32) {
-  const progman = user32.FindWindowW('Progman', null);
-  if (!progman) return null;
-
-  const resultPtr = koffi.alloc('uintptr', 1);
-  user32.SendMessageTimeoutW(
-    asHwnd(progman),
-    WM_SPAWN_WORKER,
-    0,
-    0,
-    SMTO_NORMAL,
-    1000,
-    resultPtr,
-  );
-
-  let workerW = null;
-  const callback = koffi.register((hwnd) => {
-    const shellView = user32.FindWindowExW(
-      asHwnd(hwnd),
-      null,
-      'SHELLDLL_DefView',
-      null,
-    );
-    if (shellView) workerW = hwnd;
-    return true;
-  }, koffi.pointer(EnumWindowsProc));
-
-  user32.EnumWindows(callback, 0);
-  koffi.unregister(callback);
-
-  return workerW || progman;
-}
-
 function hwndFromWindow(win) {
   if (!win || win.isDestroyed()) return null;
   const handle = win.getNativeWindowHandle();
   return readHwndFromBuffer(handle);
+}
+
+function screenPointToWorkerClient(user32, workerW, screenX, screenY) {
+  const point = koffi.alloc('int32', 2);
+  koffi.encode(point, 'int32', screenX, 0);
+  koffi.encode(point, 'int32', screenY, 4);
+  user32.ScreenToClient(asHwnd(workerW), point);
+  return {
+    x: koffi.decode(point, 'int32', 0),
+    y: koffi.decode(point, 'int32', 4),
+  };
+}
+
+function restoreWidgetPlacement(user32, hwnd, workerW, bounds) {
+  const { x, y } = screenPointToWorkerClient(user32, workerW, bounds.x, bounds.y);
+  user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+  user32.SetWindowPos(
+    asHwnd(hwnd),
+    asHwnd(HWND_TOP),
+    x,
+    y,
+    bounds.width,
+    bounds.height,
+    SWP_SHOWWINDOW | SWP_NOACTIVATE,
+  );
 }
 
 /**
@@ -107,15 +150,16 @@ function pinWidgetToDesktop(win) {
     const hwnd = hwndFromWindow(win);
     if (!hwnd) return false;
 
-    const workerW = findDesktopWorkerW(user32);
-    if (!workerW || !user32.IsWindow(asHwnd(workerW))) return false;
+    const workerW = findDesktopWorkerW();
+    if (!workerW) return false;
 
     const bounds = win.getBounds();
     user32.SetParent(asHwnd(hwnd), asHwnd(workerW));
+    restoreWidgetPlacement(user32, hwnd, workerW, bounds);
     win.setAlwaysOnTop(false);
-    // Reparenting can reset placement; restore the on-screen coordinates.
+    // Electron may still reconcile bounds after reparenting.
     win.setBounds(bounds);
-    return true;
+    return user32.IsWindowVisible(asHwnd(hwnd));
   } catch (err) {
     console.error('desktop-pin: failed to pin widget', err);
     return false;
@@ -125,4 +169,5 @@ function pinWidgetToDesktop(win) {
 module.exports = {
   isDesktopPinSupported,
   pinWidgetToDesktop,
+  findDesktopWorkerW,
 };
