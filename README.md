@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Electron-28-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron">
   <img src="https://img.shields.io/badge/tests-100%20passing-22c55e?style=for-the-badge" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-e8e8ea?style=for-the-badge" alt="MIT">
+  <a href="https://github.com/Hesamsamani/API-Meter/releases/latest"><img src="https://img.shields.io/github/v/release/Hesamsamani/API-Meter?style=for-the-badge&label=download" alt="Latest release"></a>
 </p>
 
 ---
