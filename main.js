@@ -39,6 +39,34 @@ let popoverWin = null;
 let floatingWin = null;
 let settingsWin = null;
 let broadcastTimer = null;
+/** Last provider count reported by the widget renderer for fitWindow. */
+let lastWidgetProviderCount = 1;
+
+function mergeSettingsPatch(patch = {}) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'floatingWidget' && value && typeof value === 'object') {
+      settings.set('floatingWidget', {
+        ...settings.get('floatingWidget'),
+        ...value,
+      });
+      continue;
+    }
+    if (key === 'alerts' && value && typeof value === 'object') {
+      settings.set('alerts', {
+        ...settings.get('alerts'),
+        ...value,
+      });
+      continue;
+    }
+    settings.set(key, value);
+  }
+}
+
+function widgetProviderCountForBounds(count = lastWidgetProviderCount) {
+  const n = Number(count);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return lastWidgetProviderCount;
+}
 
 function flushUsageBroadcast() {
   broadcastTimer = null;
@@ -69,9 +97,7 @@ function evaluateAlerts(snapshots) {
 }
 
 function applySettingsPatch(patch) {
-  for (const [key, value] of Object.entries(patch)) {
-    settings.set(key, value);
-  }
+  mergeSettingsPatch(patch);
   if (Object.prototype.hasOwnProperty.call(patch, 'launchAtStartup')) {
     try {
       applyLaunchAtStartup(!!patch.launchAtStartup);
@@ -85,7 +111,7 @@ function applySettingsPatch(patch) {
       applyWidgetClickThrough(floatingWin, fw.clickThrough);
     }
     if (floatingWin.isVisible()) {
-      applyWidgetWindowBounds(floatingWin, fw, 1);
+      applyWidgetWindowBounds(floatingWin, fw, widgetProviderCountForBounds());
     }
   }
   alertManager.warn = settings.get('alerts.warnThreshold');
@@ -198,29 +224,33 @@ function registerIpc() {
   ipcMain.handle('widget:fitWindow', (e, providerCount = 1, orbSlots = 0) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (!win) return null;
-    applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount, orbSlots);
+    lastWidgetProviderCount = widgetProviderCountForBounds(providerCount);
+    applyWidgetWindowBounds(win, settings.get('floatingWidget'), lastWidgetProviderCount, orbSlots);
     return win.getSize();
   });
 
-  ipcMain.handle('widget:setClickThrough', (e, enabled) => {
+  ipcMain.handle('widget:setClickThrough', (e, enabled, providerCount = lastWidgetProviderCount) => {
     const on = !!enabled;
-    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
-    settings.set('floatingWidget', { ...fw, clickThrough: on });
+    const count = widgetProviderCountForBounds(providerCount);
+    const raw = settings.get('floatingWidget');
+    const fw = normalizeWidgetSettings(raw);
+    settings.set('floatingWidget', { ...raw, ...fw, clickThrough: on });
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
     if (win) {
       applyWidgetClickThrough(win, on);
-      applyWidgetWindowBounds(win, settings.get('floatingWidget'), 1);
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), count);
     }
     broadcastSettings();
     return on;
   });
 
   ipcMain.handle('widget:resize', (e, direction = 1, providerCount = 1) => {
-    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const raw = settings.get('floatingWidget');
+    const fw = normalizeWidgetSettings(raw);
     const next = direction > 0 ? nextSize(fw.size) : prevSize(fw.size);
     if (next === fw.size) return next;
-    settings.set('floatingWidget', { ...fw, size: next });
+    settings.set('floatingWidget', { ...raw, ...fw, size: next });
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
     if (win) {
@@ -231,23 +261,25 @@ function registerIpc() {
   });
 
   ipcMain.handle('widget:cycleTheme', (e) => {
-    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const raw = settings.get('floatingWidget');
+    const fw = normalizeWidgetSettings(raw);
     const theme = nextTheme(fw.theme);
     if (theme === fw.theme) return theme;
-    settings.set('floatingWidget', { ...fw, theme });
+    settings.set('floatingWidget', { ...raw, ...fw, theme });
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
     if (win && win.isVisible()) {
-      applyWidgetWindowBounds(win, settings.get('floatingWidget'), 1);
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), widgetProviderCountForBounds());
     }
     broadcastSettings();
     return theme;
   });
 
   ipcMain.handle('widget:cycleDisplayMode', (e, providerCount = 1) => {
-    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const raw = settings.get('floatingWidget');
+    const fw = normalizeWidgetSettings(raw);
     const displayMode = nextDisplayMode(fw.displayMode);
-    settings.set('floatingWidget', { ...fw, displayMode });
+    settings.set('floatingWidget', { ...raw, ...fw, displayMode });
     const win = BrowserWindow.fromWebContents(e.sender)
       || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
     if (win) {

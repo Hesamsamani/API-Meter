@@ -38,6 +38,11 @@ test('widget supports orb mode, layout cycle, and click-through', () => {
   assert.match(widgetSrc, /'orb'/);
 });
 
+test('fitWindowIfNeeded keys include click-through for bounds refit', () => {
+  assert.match(widgetSrc, /cfg\.clickThrough/);
+  assert.match(widgetSrc, /setWidgetClickThrough\(next, providerCountForResize\(\)\)/);
+});
+
 test('click-through keeps themed panel background visible', () => {
   const block = widgetCss.match(/\.widget--click-through\s*\{[^}]+\}/)?.[0] || '';
   assert.doesNotMatch(block, /background:\s*transparent/);

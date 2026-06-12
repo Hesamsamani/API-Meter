@@ -30,7 +30,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   resizeWidget: (direction, providerCount) => ipcRenderer.invoke('widget:resize', direction, providerCount),
   cycleWidgetTheme: () => ipcRenderer.invoke('widget:cycleTheme'),
   cycleWidgetDisplayMode: (providerCount) => ipcRenderer.invoke('widget:cycleDisplayMode', providerCount),
-  setWidgetClickThrough: (enabled) => ipcRenderer.invoke('widget:setClickThrough', enabled),
+  setWidgetClickThrough: (enabled, providerCount) => ipcRenderer.invoke('widget:setClickThrough', enabled, providerCount),
   cancelAuthPrompt: () => ipcRenderer.invoke('auth-prompt:cancel'),
   retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),
   submitAuthPrompt: (value) => ipcRenderer.invoke('auth-prompt:submit', value),

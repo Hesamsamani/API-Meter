@@ -31,3 +31,8 @@ test('orb sizes are larger than old compact layout', () => {
 test('countOrbSlots is one cluster per provider', () => {
   assert.match(orbSrc, /return Math\.max\(1, providers\.length\)/);
 });
+
+test('updateOrbCluster rebuilds when orb node is missing', () => {
+  assert.match(orbSrc, /if \(!orb\) \{/);
+  assert.match(orbSrc, /renderOrbCluster\(snap, handlers\)/);
+});

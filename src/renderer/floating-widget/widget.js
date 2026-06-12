@@ -178,7 +178,7 @@ function applyChrome() {
 async function fitWindowIfNeeded() {
   const cfg = widgetConfig();
   const count = activeProviders.length || 0;
-  const fitKey = `${cfg.displayMode}|${cfg.size}|${count}`;
+  const fitKey = `${cfg.displayMode}|${cfg.size}|${count}|${cfg.clickThrough}`;
   if (fitKey === lastFitKey) return;
   lastFitKey = fitKey;
   try {
@@ -256,7 +256,7 @@ function renderOrbMode() {
     if (cluster && cluster.dataset.fingerprint === fp) return;
     const handlers = orbHandlers(id);
     if (cluster) {
-      updateOrbCluster(cluster, snap, handlers);
+      cluster = updateOrbCluster(cluster, snap, handlers);
     } else {
       const fresh = renderOrbCluster(snap, handlers);
       fresh.dataset.fingerprint = fp;
@@ -502,7 +502,7 @@ function showContextMenu(x, y) {
 async function toggleClickThrough() {
   const next = !widgetConfig().clickThrough;
   try {
-    await window.apiMeter.setWidgetClickThrough(next);
+    await window.apiMeter.setWidgetClickThrough(next, providerCountForResize());
   } catch (err) {
     console.error('Click-through toggle failed:', err);
   }

@@ -253,14 +253,19 @@ export function updateOrbCluster(cluster, snap, handlers = {}) {
 
   const orb = cluster.querySelector('.widget-orb');
   const sizeKey = handlers.sizeKey || 'medium';
-  if (orb) {
-    const updated = updateConcentricOrb(orb, snap, sizeKey);
-    if (updated !== orb) {
-      const fresh = renderOrbCluster(snap, handlers);
-      fresh.dataset.fingerprint = fp;
-      cluster.replaceWith(fresh);
-      return fresh;
-    }
+  if (!orb) {
+    const fresh = renderOrbCluster(snap, handlers);
+    fresh.dataset.fingerprint = fp;
+    cluster.replaceWith(fresh);
+    return fresh;
+  }
+
+  const updated = updateConcentricOrb(orb, snap, sizeKey);
+  if (updated !== orb) {
+    const fresh = renderOrbCluster(snap, handlers);
+    fresh.dataset.fingerprint = fp;
+    cluster.replaceWith(fresh);
+    return fresh;
   }
 
   cluster.dataset.fingerprint = fp;
