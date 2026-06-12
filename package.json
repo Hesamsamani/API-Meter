@@ -44,7 +44,8 @@
   "dependencies": {
     "better-sqlite3": "^11.7.0",
     "chart.js": "^4.5.1",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "koffi": "^3.0.2"
   },
   "devDependencies": {
     "electron": "^28.3.3",

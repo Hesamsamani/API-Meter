@@ -1,6 +1,7 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
+const { pinWidgetToDesktop } = require('./desktop-pin');
 const {
   normalizeWidgetSettings,
   computeWidgetBounds,
@@ -107,6 +108,7 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 
   });
   const { x, y } = clampWidgetPosition(bounds.x, bounds.y, nextWidth, nextHeight, area);
   win.setBounds({ x, y, width: nextWidth, height: nextHeight });
+  applyWidgetDesktopLayer(win);
 }
 
 function saveWidgetPosition(win, settingsStore) {
@@ -145,16 +147,16 @@ function attachWidgetPositionPersistence(win, settingsStore) {
   win.on('hide', () => saveWidgetPosition(win, settingsStore));
 }
 
+function applyWidgetDesktopLayer(win) {
+  if (!win || win.isDestroyed()) return;
+  pinWidgetToDesktop(win);
+}
+
 function applyWidgetClickThrough(win, enabled) {
   if (!win || win.isDestroyed()) return;
   const on = !!enabled;
   win.setIgnoreMouseEvents(on, { forward: true });
-  if (on) {
-    // Rainmeter-style: above desktop wallpaper, below normal app windows.
-    win.setAlwaysOnTop(false);
-  } else {
-    win.setAlwaysOnTop(true);
-  }
+  applyWidgetDesktopLayer(win);
 }
 
 function createFloatingWidget(fwSettings = {}, settingsStore = null) {
@@ -176,8 +178,11 @@ function createFloatingWidget(fwSettings = {}, settingsStore = null) {
     },
   });
   win.loadFile(path.join(__dirname, '../renderer/floating-widget/index.html'));
-  applyWidgetClickThrough(win, fw.clickThrough);
-  applyWidgetPosition(win, fw);
+  win.once('ready-to-show', () => {
+    applyWidgetClickThrough(win, fw.clickThrough);
+    applyWidgetPosition(win, fw);
+  });
+  win.on('show', () => applyWidgetDesktopLayer(win));
   attachWidgetPositionPersistence(win, settingsStore);
   return win;
 }
@@ -229,9 +234,10 @@ function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }
     win.hide();
     settings.set('floatingWidget.enabled', false);
   } else {
-    win.show();
-    settings.set('floatingWidget.enabled', true);
     applyWidgetClickThrough(win, settings.get('floatingWidget.clickThrough') === true);
+    win.show();
+    applyWidgetDesktopLayer(win);
+    settings.set('floatingWidget.enabled', true);
   }
   return win;
 }
@@ -247,6 +253,7 @@ module.exports = {
   toggleFloatingWidget,
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
+  applyWidgetDesktopLayer,
   applyWidgetPosition,
   attachWidgetPositionPersistence,
   saveWidgetPosition,
