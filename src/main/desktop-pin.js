@@ -12,6 +12,12 @@ let lib = null;
 let api = null;
 let EnumWindowsProc = null;
 
+/** Cast a BigInt HWND to the void * type koffi expects at FFI boundaries. */
+function asHwnd(hwnd) {
+  if (hwnd == null || hwnd === 0n) return null;
+  return koffi.as(hwnd, 'void *');
+}
+
 function loadApi() {
   if (api) return api;
   if (platform !== 'win32') return null;
@@ -31,7 +37,6 @@ function loadApi() {
       SetParent: lib.func('SetParent', 'void *', ['void *', 'void *']),
       IsWindow: lib.func('IsWindow', 'bool', ['void *']),
       EnumWindows: lib.func('EnumWindows', 'bool', [koffi.pointer(EnumWindowsProc), 'intptr']),
-      decodeHwnd: (buf) => koffi.decode(buf, 'void *', 0),
     };
     return api;
   } catch (err) {
@@ -44,16 +49,35 @@ function isDesktopPinSupported() {
   return !!loadApi();
 }
 
+function readHwndFromBuffer(buf) {
+  if (!buf || buf.length < 4) return null;
+  const ptr = buf.length >= 8 ? buf.readBigUInt64LE(0) : BigInt(buf.readUInt32LE(0));
+  return ptr === 0n ? null : ptr;
+}
+
 function findDesktopWorkerW(user32) {
   const progman = user32.FindWindowW('Progman', null);
   if (!progman) return null;
 
   const resultPtr = koffi.alloc('uintptr', 1);
-  user32.SendMessageTimeoutW(progman, WM_SPAWN_WORKER, 0, 0, SMTO_NORMAL, 1000, resultPtr);
+  user32.SendMessageTimeoutW(
+    asHwnd(progman),
+    WM_SPAWN_WORKER,
+    0,
+    0,
+    SMTO_NORMAL,
+    1000,
+    resultPtr,
+  );
 
   let workerW = null;
   const callback = koffi.register((hwnd) => {
-    const shellView = user32.FindWindowExW(hwnd, null, 'SHELLDLL_DefView', null);
+    const shellView = user32.FindWindowExW(
+      asHwnd(hwnd),
+      null,
+      'SHELLDLL_DefView',
+      null,
+    );
     if (shellView) workerW = hwnd;
     return true;
   }, koffi.pointer(EnumWindowsProc));
@@ -67,10 +91,7 @@ function findDesktopWorkerW(user32) {
 function hwndFromWindow(win) {
   if (!win || win.isDestroyed()) return null;
   const handle = win.getNativeWindowHandle();
-  if (!handle || handle.length < 4) return null;
-  const user32 = loadApi();
-  if (!user32) return null;
-  return user32.decodeHwnd(handle);
+  return readHwndFromBuffer(handle);
 }
 
 /**
@@ -79,21 +100,26 @@ function hwndFromWindow(win) {
  * @returns {boolean}
  */
 function pinWidgetToDesktop(win) {
-  const user32 = loadApi();
-  if (!user32 || !win || win.isDestroyed()) return false;
+  try {
+    const user32 = loadApi();
+    if (!user32 || !win || win.isDestroyed()) return false;
 
-  const hwnd = hwndFromWindow(win);
-  if (!hwnd) return false;
+    const hwnd = hwndFromWindow(win);
+    if (!hwnd) return false;
 
-  const workerW = findDesktopWorkerW(user32);
-  if (!workerW || !user32.IsWindow(workerW)) return false;
+    const workerW = findDesktopWorkerW(user32);
+    if (!workerW || !user32.IsWindow(asHwnd(workerW))) return false;
 
-  const bounds = win.getBounds();
-  user32.SetParent(hwnd, workerW);
-  win.setAlwaysOnTop(false);
-  // Reparenting can reset placement; restore the on-screen coordinates.
-  win.setBounds(bounds);
-  return true;
+    const bounds = win.getBounds();
+    user32.SetParent(asHwnd(hwnd), asHwnd(workerW));
+    win.setAlwaysOnTop(false);
+    // Reparenting can reset placement; restore the on-screen coordinates.
+    win.setBounds(bounds);
+    return true;
+  } catch (err) {
+    console.error('desktop-pin: failed to pin widget', err);
+    return false;
+  }
 }
 
 module.exports = {

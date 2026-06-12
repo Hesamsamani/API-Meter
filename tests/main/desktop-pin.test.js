@@ -13,6 +13,8 @@ test('desktop-pin uses WorkerW spawn and SetParent', () => {
   assert.match(pinSrc, /SHELLDLL_DefView/);
   assert.match(pinSrc, /SetParent/);
   assert.match(pinSrc, /pinWidgetToDesktop/);
+  assert.match(pinSrc, /koffi\.as\(hwnd, 'void \*'\)/);
+  assert.match(pinSrc, /readBigUInt64LE/);
 });
 
 test('floating widget is pinned on show and click-through changes', () => {
