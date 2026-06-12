@@ -27,8 +27,10 @@ test('widget uses incremental card updates and provider id tracking', () => {
   assert.match(widgetSrc, /lastFingerprints\.get\(id\) === fp/);
 });
 
-test('widget supports orb mode and click-through context menu', () => {
+test('widget supports orb mode, layout cycle, and click-through', () => {
   assert.match(widgetSrc, /renderOrbMode/);
+  assert.match(widgetSrc, /cycleLayout/);
+  assert.match(widgetSrc, /cycleWidgetDisplayMode/);
   assert.match(widgetSrc, /setWidgetClickThrough/);
   assert.match(widgetSrc, /contextmenu/);
   assert.match(widgetSrc, /'orb'/);

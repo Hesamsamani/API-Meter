@@ -24,6 +24,7 @@ const {
   nextSize,
   prevSize,
   nextTheme,
+  nextDisplayMode,
 } = require('./src/shared/widget-presets');
 const { applyLaunchAtStartup, syncLaunchAtStartup } = require('./src/main/startup');
 const { applyProviderLoginFailure } = require('./src/main/login-error');
@@ -231,8 +232,26 @@ function registerIpc() {
     const theme = nextTheme(fw.theme);
     if (theme === fw.theme) return theme;
     settings.set('floatingWidget', { ...fw, theme });
+    const win = BrowserWindow.fromWebContents(e.sender)
+      || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
+    if (win && win.isVisible()) {
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), 1);
+    }
     broadcastSettings();
     return theme;
+  });
+
+  ipcMain.handle('widget:cycleDisplayMode', (e, providerCount = 1) => {
+    const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
+    const displayMode = nextDisplayMode(fw.displayMode);
+    settings.set('floatingWidget', { ...fw, displayMode });
+    const win = BrowserWindow.fromWebContents(e.sender)
+      || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
+    if (win) {
+      applyWidgetWindowBounds(win, settings.get('floatingWidget'), providerCount);
+    }
+    broadcastSettings();
+    return displayMode;
   });
 }
 

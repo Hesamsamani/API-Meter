@@ -104,6 +104,12 @@ const WIDGET_DISPLAY_MODES = {
 
 const SIZE_ORDER = ['small', 'medium', 'large'];
 const THEME_ORDER = ['dark', 'midnight', 'glass', 'light', 'minimal'];
+const DISPLAY_MODE_ORDER = ['single', 'grid', 'compact', 'orb'];
+
+function nextDisplayMode(current) {
+  const idx = DISPLAY_MODE_ORDER.indexOf(current);
+  return DISPLAY_MODE_ORDER[(idx + 1) % DISPLAY_MODE_ORDER.length] || 'single';
+}
 
 function normalizeWidgetSettings(fw = {}) {
   return {
@@ -147,11 +153,11 @@ const GRID_CARD_HEIGHT = { small: 162, medium: 184, large: 200 };
 const SINGLE_CARD_HEIGHT = { small: 150, medium: 172, large: 194 };
 const SINGLE_FOOTER_MULTI = 30;
 const SINGLE_FOOTER_SINGLE = 12;
-const ORB_SIZE = { small: 34, medium: 42, large: 50 };
-const ORB_LABEL = 12;
-const ORB_GAP = 5;
-const ORB_CLUSTER_GAP = 10;
-const ORB_HEADER = 22;
+const ORB_SIZE = { small: 52, medium: 64, large: 76 };
+const ORB_LEGEND = 22;
+const ORB_CLUSTER_GAP = 12;
+const ORB_HEADER = 30;
+const ORB_CLUSTER_PAD = 10;
 
 function widgetWidthForMode(preset, displayMode) {
   if (displayMode === 'grid') return preset.gridWidth;
@@ -160,17 +166,18 @@ function widgetWidthForMode(preset, displayMode) {
   return preset.width;
 }
 
-function computeOrbBounds(fw, providerCount, orbSlots = 0) {
+function computeOrbBounds(fw, providerCount) {
   const orbSize = ORB_SIZE[fw.size] || ORB_SIZE.medium;
-  const slots = Math.max(1, orbSlots || providerCount * 2);
-  const perRow = fw.size === 'small' ? 4 : fw.size === 'large' ? 6 : 5;
-  const rows = Math.max(1, Math.ceil(slots / perRow));
-  const slotsFirstRow = Math.min(slots, perRow);
-  const rowHeight = orbSize + ORB_LABEL + 4;
+  const count = Math.max(1, providerCount);
+  const perRow = fw.size === 'small' ? 2 : fw.size === 'large' ? 4 : 3;
+  const cols = Math.min(count, perRow);
+  const rows = Math.ceil(count / perRow);
+  const clusterWidth = orbSize + ORB_CLUSTER_PAD * 2;
+  const rowHeight = orbSize + ORB_LEGEND + ORB_CLUSTER_PAD;
 
   return {
-    width: 14 + slotsFirstRow * orbSize + Math.max(0, slotsFirstRow - 1) * ORB_GAP + 14,
-    height: ORB_HEADER + 10 + rows * rowHeight + Math.max(0, rows - 1) * ORB_CLUSTER_GAP + 8,
+    width: 16 + cols * clusterWidth + Math.max(0, cols - 1) * ORB_CLUSTER_GAP,
+    height: ORB_HEADER + 8 + rows * rowHeight + Math.max(0, rows - 1) * ORB_CLUSTER_GAP,
   };
 }
 
@@ -188,7 +195,7 @@ function computeWidgetBounds(fw, providerCount = 1, orbSlots = 0) {
   const count = Math.max(1, providerCount);
 
   if (fw.displayMode === 'orb') {
-    return computeOrbBounds(fw, count, orbSlots);
+    return computeOrbBounds(fw, count);
   }
 
   if (fw.displayMode === 'grid') {
@@ -227,5 +234,7 @@ module.exports = {
   nextSize,
   prevSize,
   nextTheme,
+  nextDisplayMode,
+  DISPLAY_MODE_ORDER,
   computeWidgetBounds,
 };

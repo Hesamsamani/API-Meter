@@ -5,6 +5,8 @@ import {
   computeWidgetBounds,
   nextSize,
   prevSize,
+  nextDisplayMode,
+  DISPLAY_MODE_ORDER,
 } from '../../src/shared/widget-presets.js';
 
 test('normalizeWidgetSettings applies defaults', () => {
@@ -59,18 +61,26 @@ test('normalizeWidgetSettings includes clickThrough default false', () => {
   assert.equal(normalizeWidgetSettings({ clickThrough: true }).clickThrough, true);
 });
 
-test('computeWidgetBounds orb mode is narrower than compact for one provider', () => {
-  const compact = normalizeWidgetSettings({ displayMode: 'compact', size: 'medium' });
+test('computeWidgetBounds orb mode fits concentric cluster', () => {
   const orb = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium' });
-  const compactBounds = computeWidgetBounds(compact, 1);
-  const orbBounds = computeWidgetBounds(orb, 1, 2);
-  assert.ok(orbBounds.width < compactBounds.width);
-  assert.ok(orbBounds.height < 120);
+  const one = computeWidgetBounds(orb, 1);
+  assert.ok(one.width >= 80);
+  assert.ok(one.height >= 100);
 });
 
-test('computeWidgetBounds orb scales with orb slot count', () => {
+test('computeWidgetBounds orb scales with provider count', () => {
   const orb = normalizeWidgetSettings({ displayMode: 'orb', size: 'medium' });
-  const two = computeWidgetBounds(orb, 1, 2);
-  const four = computeWidgetBounds(orb, 2, 4);
-  assert.ok(four.width >= two.width);
+  const one = computeWidgetBounds(orb, 1);
+  const three = computeWidgetBounds(orb, 3);
+  assert.ok(three.width >= one.width);
+});
+
+test('nextDisplayMode cycles through all layouts', () => {
+  let mode = 'single';
+  const seen = new Set();
+  for (let i = 0; i < DISPLAY_MODE_ORDER.length; i++) {
+    seen.add(mode);
+    mode = nextDisplayMode(mode);
+  }
+  assert.equal(seen.size, DISPLAY_MODE_ORDER.length);
 });

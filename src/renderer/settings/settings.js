@@ -107,8 +107,10 @@ async function init() {
       const fw = incoming.floatingWidget || {};
       const sizeEl = document.getElementById('widget-size');
       const themeEl = document.getElementById('widget-theme');
+      const modeEl = document.getElementById('widget-display-mode');
       if (sizeEl && fw.size) sizeEl.value = fw.size;
       if (themeEl && fw.theme) themeEl.value = fw.theme;
+      if (modeEl && fw.displayMode) modeEl.value = fw.displayMode;
       const pinnedProviders = [];
       widgetPinGrid?.querySelectorAll('[data-widget-pin]').forEach((input) => {
         if (input.checked) pinnedProviders.push(input.dataset.widgetPin);

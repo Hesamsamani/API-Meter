@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('apiMeter', {
   fitWidgetWindow: (providerCount, orbSlots) => ipcRenderer.invoke('widget:fitWindow', providerCount, orbSlots),
   resizeWidget: (direction, providerCount) => ipcRenderer.invoke('widget:resize', direction, providerCount),
   cycleWidgetTheme: () => ipcRenderer.invoke('widget:cycleTheme'),
+  cycleWidgetDisplayMode: (providerCount) => ipcRenderer.invoke('widget:cycleDisplayMode', providerCount),
   setWidgetClickThrough: (enabled) => ipcRenderer.invoke('widget:setClickThrough', enabled),
   cancelAuthPrompt: () => ipcRenderer.invoke('auth-prompt:cancel'),
   retryAuthPrompt: () => ipcRenderer.invoke('auth-prompt:retry'),

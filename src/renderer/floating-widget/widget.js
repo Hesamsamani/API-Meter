@@ -10,7 +10,6 @@ import {
 import {
   renderOrbCluster,
   updateOrbCluster,
-  countOrbSlots,
   orbFingerprint,
 } from '../shared/widget-orb.js';
 import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
@@ -40,6 +39,18 @@ const SIZE_GAUGE = {
 };
 
 const DISPLAY_MODES = ['single', 'grid', 'compact', 'orb'];
+const MODE_LABELS = {
+  single: 'Single',
+  grid: 'Grid',
+  compact: 'List',
+  orb: 'Orbs',
+};
+const MODE_ICONS = {
+  single: '◉',
+  grid: '⊞',
+  compact: '≡',
+  orb: '◎',
+};
 
 function widgetConfig() {
   const fw = settings.floatingWidget || {};
@@ -147,22 +158,22 @@ function applyChrome() {
   if (ctxClickThrough) {
     ctxClickThrough.textContent = cfg.clickThrough ? 'Disable click-through' : 'Enable click-through';
   }
+  const layoutBtn = document.getElementById('widget-layout');
+  if (layoutBtn) {
+    layoutBtn.textContent = MODE_ICONS[cfg.displayMode] || '◎';
+    layoutBtn.title = `Layout: ${MODE_LABELS[cfg.displayMode] || cfg.displayMode} (click to cycle)`;
+  }
   return changed;
-}
-
-function orbSlotCount() {
-  return countOrbSlots(activeProviders, snapshots, placeholderSnap);
 }
 
 async function fitWindowIfNeeded() {
   const cfg = widgetConfig();
   const count = activeProviders.length || 0;
-  const slots = cfg.displayMode === 'orb' ? orbSlotCount() : 0;
-  const fitKey = `${cfg.displayMode}|${cfg.size}|${count}|${slots}`;
+  const fitKey = `${cfg.displayMode}|${cfg.size}|${count}`;
   if (fitKey === lastFitKey) return;
   lastFitKey = fitKey;
   try {
-    await window.apiMeter.fitWidgetWindow(count, slots);
+    await window.apiMeter.fitWidgetWindow(count, count);
   } catch (err) {
     console.error('fitWidgetWindow failed:', err);
   }
@@ -431,6 +442,23 @@ function providerCountForResize() {
   return activeProviders.length || 0;
 }
 
+async function cycleLayout() {
+  try {
+    const next = await window.apiMeter.cycleWidgetDisplayMode(providerCountForResize());
+    if (next && settings.floatingWidget) {
+      settings = {
+        ...settings,
+        floatingWidget: { ...settings.floatingWidget, displayMode: next },
+      };
+      lastChromeKey = '';
+      lastFitKey = '';
+      renderWidget();
+    }
+  } catch (err) {
+    console.error('Layout cycle failed:', err);
+  }
+}
+
 async function applyResize(direction) {
   try {
     const nextSize = await window.apiMeter.resizeWidget(direction, providerCountForResize());
@@ -487,6 +515,10 @@ function bindContextMenu() {
   });
 
   ctxClickThrough?.addEventListener('click', toggleClickThrough);
+  document.getElementById('ctx-layout')?.addEventListener('click', () => {
+    hideContextMenu();
+    cycleLayout();
+  });
   document.getElementById('ctx-settings')?.addEventListener('click', () => {
     hideContextMenu();
     window.apiMeter.openSettings();
@@ -501,6 +533,8 @@ async function init() {
   document.getElementById('widget-close')?.addEventListener('click', () => {
     window.apiMeter.toggleFloatingWidget();
   });
+
+  document.getElementById('widget-layout')?.addEventListener('click', () => cycleLayout());
 
   document.getElementById('widget-smaller')?.addEventListener('click', () => applyResize(-1));
   document.getElementById('widget-larger')?.addEventListener('click', () => applyResize(1));
