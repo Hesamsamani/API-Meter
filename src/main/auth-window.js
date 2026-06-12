@@ -198,6 +198,26 @@ function waitingMessage() {
   return 'Finish sign-in in the API-Meter browser window. Session is detected automatically.';
 }
 
+async function completeLoginWithVerification(session, hit, extra = {}) {
+  if (!isSessionActive(session)) return;
+  if (session.opts.probeUrl) {
+    sendPrompt('auth-prompt:status', { status: 'Verifying session…', mode: 'waiting' });
+    try {
+      await verifyImportedSession(session.opts);
+    } catch (err) {
+      const { setSecret } = require('./store');
+      setSecret(session.opts.secretKey, '');
+      setSecret(`${session.opts.secretKey}-cookie-name`, '');
+      sendPrompt('auth-prompt:status', {
+        status: `Verification failed: ${err.message || err}`,
+        mode: 'error',
+      });
+      return;
+    }
+  }
+  await completeLogin(session, hit, extra);
+}
+
 async function completeLogin(session, hit, extra = {}) {
   if (!isSessionActive(session)) return;
   session.completed = true;
@@ -297,7 +317,7 @@ function registerPromptHandlers(session) {
       const hit = await tryCaptureInAppCookie(session.opts);
       if (!isSessionActive(session)) return;
       if (hit) {
-        await completeLogin(session, hit);
+        await completeLoginWithVerification(session, hit);
       } else {
         sendPrompt('auth-prompt:status', { status: waitingMessage(), mode: 'waiting' });
       }
@@ -375,7 +395,7 @@ function openAuthWindowInner(opts) {
       try {
         const hit = await tryCaptureInAppCookie(opts);
         if (!isSessionActive(session)) return;
-        if (hit) await completeLogin(session, hit);
+        if (hit) await completeLoginWithVerification(session, hit);
       } finally {
         session.polling = false;
       }

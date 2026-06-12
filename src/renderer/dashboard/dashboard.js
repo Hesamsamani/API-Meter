@@ -152,10 +152,17 @@ function renderGrid(data) {
 
 function updateStatusLine() {
   const snaps = visibleOrder().map((id) => snapshots[id]).filter(Boolean);
-  const live = snaps.filter((s) => s.source === 'live').length;
-  const stale = snaps.filter((s) => s.source === 'stale').length;
+  const live = snaps.filter((s) => s.source === 'live' && !s.error).length;
+  const stale = snaps.filter((s) => s.source === 'stale' || (s.error && s.windows?.length)).length;
+  const local = snaps.filter((s) => s.source === 'local' && !s.error).length;
+  const errors = snaps.filter((s) => s.error && !s.windows?.length).length;
   const worst = snaps.reduce((max, s) => Math.max(max, worstDisplayPercent(s)), 0);
-  statusLine.textContent = `${live} live · ${stale} stale · peak ${worst}%`;
+  const parts = [`${live} live`];
+  if (stale) parts.push(`${stale} stale`);
+  if (local) parts.push(`${local} local`);
+  if (errors) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
+  parts.push(`peak ${worst}%`);
+  statusLine.textContent = parts.join(' · ');
 }
 
 function openDetail(providerId) {

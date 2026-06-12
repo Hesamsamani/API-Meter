@@ -144,7 +144,13 @@ async function init() {
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      current = await window.apiMeter.updateSettings(collectPatch());
+      const live = await window.apiMeter.getSettings();
+      const patch = collectPatch();
+      patch.floatingWidget = {
+        ...patch.floatingWidget,
+        enabled: live.floatingWidget?.enabled ?? false,
+      };
+      current = await window.apiMeter.updateSettings(patch);
       formDirty = false;
       populateForm(current);
     } catch (err) {

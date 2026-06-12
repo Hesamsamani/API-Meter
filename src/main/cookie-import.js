@@ -117,6 +117,15 @@ async function verifyImportedSession(opts) {
       expectJson: opts.probeExpectJson !== false,
     });
   }
+  if (isGeminiBatchExecuteProbe(opts) && typeof body === 'string') {
+    const { parseGeminiBatchExecute, extractGeminiQuota, quotaHasUsage } = require('../providers/gemini');
+    const inner = parseGeminiBatchExecute(body);
+    const quota = extractGeminiQuota(inner);
+    if (!quotaHasUsage(quota)) {
+      throw new Error('Gemini session probe returned no quota data');
+    }
+    return true;
+  }
   if (opts.probeExpectJson === false && typeof body === 'string' && body.length < 8) {
     throw new Error('Empty response — session may be invalid');
   }

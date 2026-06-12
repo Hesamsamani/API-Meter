@@ -44,6 +44,11 @@ class CollectorScheduler {
       const snap = await adapter.fetchUsage();
       snap.plan = adapter.detectPlan(snap) || snap.plan;
       this.store.setSnapshot(adapter.id, snap);
+      if (snap.error || snap.refreshFailed) {
+        this.backoff.set(adapter.id, this.nextDelay(adapter.id, false, snap.error || 'refresh failed'));
+        this.onUpdate();
+        return false;
+      }
       if (snap.source === 'live' && !snap.error) {
         appendHistory(adapter.id, {
           timestamp: Date.now(),

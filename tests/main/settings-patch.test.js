@@ -18,3 +18,10 @@ test('widget bounds handlers use last fit provider count', () => {
   assert.match(mainSrc, /widget:setClickThrough.*providerCount/);
   assert.match(mainSrc, /widgetProviderCountForBounds/);
 });
+
+test('settings patch normalizes layer order and handles desktop fallback', () => {
+  assert.match(mainSrc, /normalizeLayerOrder/);
+  assert.match(mainSrc, /layerResult\.fallback/);
+  assert.match(mainSrc, /autoShow:\s*true/);
+  assert.match(mainSrc, /widget:setLayerOrder/);
+});

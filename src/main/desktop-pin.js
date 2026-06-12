@@ -15,6 +15,7 @@ let koffi = null;
 let lib = null;
 let api = null;
 let EnumWindowsProc = null;
+let cachedWorkerW = null;
 
 /** Cast a BigInt HWND to the void * type koffi expects at FFI boundaries. */
 function asHwnd(hwnd) {
@@ -44,7 +45,7 @@ function loadApi() {
       ShowWindow: lib.func('ShowWindow', 'bool', ['void *', 'int']),
       SetWindowPos: lib.func('SetWindowPos', 'bool', ['void *', 'void *', 'int', 'int', 'int', 'int', 'uint']),
       ScreenToClient: lib.func('ScreenToClient', 'bool', ['void *', 'void *']),
-      IsWindowVisible: lib.func('IsWindowVisible', 'bool', ['void *']),
+      GetParent: lib.func('GetParent', 'void *', ['void *']),
     };
     return api;
   } catch (err) {
@@ -59,7 +60,6 @@ function isDesktopPinSupported() {
 
 function spawnDesktopWorker(user32, progman) {
   const resultPtr = koffi.alloc('uintptr', 1);
-  // Legacy + Win10/11 spawn variants — harmless if one is ignored by the shell.
   user32.SendMessageTimeoutW(asHwnd(progman), WM_SPAWN_WORKER, 0, 0, SMTO_NORMAL, 1000, resultPtr);
   user32.SendMessageTimeoutW(asHwnd(progman), WM_SPAWN_WORKER, 0xd, 1, SMTO_NORMAL, 1000, resultPtr);
 }
@@ -68,12 +68,15 @@ function findDesktopWorkerW() {
   const user32 = loadApi();
   if (!user32) return null;
 
+  if (cachedWorkerW && user32.IsWindow(asHwnd(cachedWorkerW))) {
+    return cachedWorkerW;
+  }
+
   const progman = user32.FindWindowW('Progman', null);
   if (!progman) return null;
 
   spawnDesktopWorker(user32, progman);
 
-  // Win11: WorkerW is often a child of Progman (not a top-level sibling).
   let workerW = user32.FindWindowExW(asHwnd(progman), null, 'WorkerW', null);
 
   if (!workerW) {
@@ -95,8 +98,9 @@ function findDesktopWorkerW() {
     workerW = user32.FindWindowW('WorkerW', null);
   }
 
-  // Never parent to Progman — that hides the widget behind SHELLDLL_DefView icons.
+  // Never parent to Progman — only the child WorkerW hosts the desktop layer.
   if (!workerW || workerW === progman || !user32.IsWindow(asHwnd(workerW))) return null;
+  cachedWorkerW = workerW;
   return workerW;
 }
 
@@ -112,6 +116,17 @@ function hwndFromWindow(win) {
   return readHwndFromBuffer(handle);
 }
 
+function isWidgetPinnedToDesktop(win) {
+  const user32 = loadApi();
+  if (!user32 || !win || win.isDestroyed()) return false;
+  const hwnd = hwndFromWindow(win);
+  if (!hwnd) return false;
+  const workerW = findDesktopWorkerW();
+  if (!workerW) return false;
+  const parent = user32.GetParent(asHwnd(hwnd));
+  return parent === workerW;
+}
+
 function screenPointToWorkerClient(user32, workerW, screenX, screenY) {
   const point = koffi.alloc('int32', 2);
   koffi.encode(point, 'int32', screenX, 0);
@@ -123,9 +138,11 @@ function screenPointToWorkerClient(user32, workerW, screenX, screenY) {
   };
 }
 
-function restoreWidgetPlacement(user32, hwnd, workerW, bounds) {
+function restoreWidgetPlacement(user32, hwnd, workerW, bounds, { shouldShow = true } = {}) {
   const { x, y } = screenPointToWorkerClient(user32, workerW, bounds.x, bounds.y);
-  user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+  if (shouldShow) {
+    user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+  }
   user32.SetWindowPos(
     asHwnd(hwnd),
     asHwnd(HWND_TOP),
@@ -133,33 +150,32 @@ function restoreWidgetPlacement(user32, hwnd, workerW, bounds) {
     y,
     bounds.width,
     bounds.height,
-    SWP_SHOWWINDOW | SWP_NOACTIVATE,
+    (shouldShow ? SWP_SHOWWINDOW : 0) | SWP_NOACTIVATE,
   );
 }
 
 /**
  * Parent the widget HWND to the desktop WorkerW layer.
  * @param {import('electron').BrowserWindow} win
+ * @param {{ shouldShow?: boolean }} [options]
  * @returns {boolean}
  */
-function pinWidgetToDesktop(win) {
+function pinWidgetToDesktop(win, { shouldShow = true } = {}) {
   try {
     const user32 = loadApi();
     if (!user32 || !win || win.isDestroyed()) return false;
 
     const hwnd = hwndFromWindow(win);
-    if (!hwnd) return false;
+    if (!hwnd || !user32.IsWindow(asHwnd(hwnd))) return false;
 
     const workerW = findDesktopWorkerW();
     if (!workerW) return false;
 
     const bounds = win.getBounds();
     user32.SetParent(asHwnd(hwnd), asHwnd(workerW));
-    restoreWidgetPlacement(user32, hwnd, workerW, bounds);
+    restoreWidgetPlacement(user32, hwnd, workerW, bounds, { shouldShow });
     win.setAlwaysOnTop(false);
-    // Electron may still reconcile bounds after reparenting.
-    win.setBounds(bounds);
-    return user32.IsWindowVisible(asHwnd(hwnd));
+    return user32.IsWindow(asHwnd(hwnd));
   } catch (err) {
     console.error('desktop-pin: failed to pin widget', err);
     return false;
@@ -169,17 +185,21 @@ function pinWidgetToDesktop(win) {
 /**
  * Detach widget from WorkerW and restore as a top-level window.
  * @param {import('electron').BrowserWindow} win
+ * @param {{ shouldShow?: boolean }} [options]
  * @returns {boolean}
  */
-function unpinWidgetFromDesktop(win) {
+function unpinWidgetFromDesktop(win, { shouldShow = true } = {}) {
   try {
+    if (!isWidgetPinnedToDesktop(win)) return true;
     const user32 = loadApi();
     if (!user32 || !win || win.isDestroyed()) return false;
     const hwnd = hwndFromWindow(win);
     if (!hwnd) return false;
     user32.SetParent(asHwnd(hwnd), null);
     const bounds = win.getBounds();
-    user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+    if (shouldShow) {
+      user32.ShowWindow(asHwnd(hwnd), SW_SHOW);
+    }
     user32.SetWindowPos(
       asHwnd(hwnd),
       asHwnd(HWND_TOP),
@@ -187,9 +207,8 @@ function unpinWidgetFromDesktop(win) {
       bounds.y,
       bounds.width,
       bounds.height,
-      SWP_SHOWWINDOW | SWP_NOACTIVATE,
+      (shouldShow ? SWP_SHOWWINDOW : 0) | SWP_NOACTIVATE,
     );
-    win.setBounds(bounds);
     return true;
   } catch (err) {
     console.error('desktop-pin: failed to unpin widget', err);
@@ -201,5 +220,6 @@ module.exports = {
   isDesktopPinSupported,
   pinWidgetToDesktop,
   unpinWidgetFromDesktop,
+  isWidgetPinnedToDesktop,
   findDesktopWorkerW,
 };

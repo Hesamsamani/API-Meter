@@ -147,9 +147,21 @@ function postViaWindow(
             let postBody = ${JSON.stringify(body)};
             if (${appendGoogleAtToken}) {
               const html = document.documentElement.innerHTML;
-              const match = html.match(/SNlM0e\\\\":\\\\"(.*?)\\\\"/);
-              if (match && !postBody.includes('at=')) {
-                postBody += '&at=' + encodeURIComponent(match[1]);
+              const patterns = [
+                /"SNlM0e":"([^"]+)"/,
+                /SNlM0e\\\\":\\\\"([^\\\\"]+)\\\\"/,
+                /SNlM0e":"([^"]+)"/,
+              ];
+              let atToken = null;
+              for (const pattern of patterns) {
+                const match = html.match(pattern);
+                if (match?.[1]) {
+                  atToken = match[1];
+                  break;
+                }
+              }
+              if (atToken && !postBody.includes('at=')) {
+                postBody += '&at=' + encodeURIComponent(atToken);
               }
             }
             const resp = await fetch(${JSON.stringify(postUrl)}, {

@@ -57,27 +57,55 @@ function geminiBatchJsonCandidates(bodyText) {
   return [text];
 }
 
+function toFiniteNumber(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function quotaHasUsage(quota) {
+  if (!quota || typeof quota !== 'object') return false;
+  return toFiniteNumber(quota.dayUsed) != null
+    || toFiniteNumber(quota.dayLimit) != null
+    || toFiniteNumber(quota.used) != null
+    || toFiniteNumber(quota.limit) != null;
+}
+
 function parseGeminiBatchRows(outer) {
   if (!Array.isArray(outer)) return null;
 
+  let otRow = null;
+  let fallback = null;
+
   for (const row of outer) {
     if (!Array.isArray(row) || row.length < 3) continue;
+    const rpcId = row[1];
     const payload = row[2];
     if (typeof payload !== 'string') continue;
     try {
       const inner = JSON.parse(payload);
-      if (Array.isArray(inner)) return inner;
-      if (inner && typeof inner === 'object') return inner;
+      const candidate = Array.isArray(inner)
+        ? inner
+        : (inner && typeof inner === 'object' ? inner : null);
+      if (!candidate) continue;
+      const quota = extractGeminiQuota(candidate);
+      if (rpcId === 'otAQ7b') {
+        if (quotaHasUsage(quota)) return candidate;
+        if (!otRow) otRow = candidate;
+        continue;
+      }
+      if (!fallback && quotaHasUsage(quota)) fallback = candidate;
     } catch {
       /* try next row */
     }
   }
-  return null;
+
+  return otRow || fallback;
 }
 
 function parseGeminiBatchExecute(bodyText) {
   const candidates = geminiBatchJsonCandidates(bodyText);
-  let lastErr = null;
+  let lastParseErr = null;
 
   for (const jsonLine of candidates) {
     try {
@@ -85,12 +113,11 @@ function parseGeminiBatchExecute(bodyText) {
       const parsed = parseGeminiBatchRows(outer);
       if (parsed) return parsed;
     } catch (err) {
-      lastErr = err;
+      lastParseErr = err;
     }
   }
 
-  if (lastErr) throw lastErr;
-  throw new Error('Gemini batchexecute: quota data not found');
+  throw lastParseErr || new Error('Gemini batchexecute: quota data not found');
 }
 
 function extractGeminiQuota(inner) {
@@ -104,7 +131,8 @@ function extractGeminiQuota(inner) {
       return null;
     }
     if (typeof node === 'object') {
-      if (Number.isFinite(node.dayUsed) || Number.isFinite(node.dayLimit)) return node;
+      if (toFiniteNumber(node.dayUsed) != null || toFiniteNumber(node.dayLimit) != null) return node;
+      if (toFiniteNumber(node.used) != null || toFiniteNumber(node.limit) != null) return node;
       if (node.quota) return node.quota;
       for (const value of Object.values(node)) {
         const hit = walk(value);
@@ -147,8 +175,11 @@ async function fetchLiveGemini() {
   );
   const inner = parseGeminiBatchExecute(raw);
   const quota = extractGeminiQuota(inner);
-  const dayUsed = Number(quota.dayUsed ?? quota.used ?? 0);
-  const dayLimit = Number(quota.dayLimit ?? quota.limit ?? AI_PRO_DAILY_LIMIT);
+  if (!quotaHasUsage(quota)) {
+    throw new Error('Gemini batchexecute: quota data not found');
+  }
+  const dayUsed = toFiniteNumber(quota.dayUsed ?? quota.used) ?? 0;
+  const dayLimit = toFiniteNumber(quota.dayLimit ?? quota.limit) ?? AI_PRO_DAILY_LIMIT;
   return {
     providerId: 'gemini',
     source: 'live',
@@ -206,6 +237,7 @@ function createGeminiAdapter() {
       } catch (err) {
         const local = mapLocalGemini(countTodaySessions());
         local.error = err.message;
+        local.refreshFailed = true;
         return local;
       }
     },
@@ -217,6 +249,7 @@ module.exports = {
   createGeminiAdapter,
   parseGeminiBatchExecute,
   extractGeminiQuota,
+  quotaHasUsage,
   mapLocalGemini,
   buildGeminiQuotaReqBody,
   GEMINI_QUOTA_BATCH_URL,

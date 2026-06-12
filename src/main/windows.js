@@ -1,7 +1,7 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
-const { pinWidgetToDesktop, unpinWidgetFromDesktop } = require('./desktop-pin');
+const { pinWidgetToDesktop, unpinWidgetFromDesktop, isWidgetPinnedToDesktop } = require('./desktop-pin');
 const {
   normalizeWidgetSettings,
   computeWidgetBounds,
@@ -93,6 +93,12 @@ function workAreaForBounds(bounds) {
   return screen.getDisplayMatching(bounds).workArea;
 }
 
+function readWidgetSettings(settingsStore, fallback = {}) {
+  return settingsStore
+    ? normalizeWidgetSettings(settingsStore.get('floatingWidget'))
+    : normalizeWidgetSettings(fallback);
+}
+
 function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 0) {
   if (!win || win.isDestroyed()) return;
   const fw = normalizeWidgetSettings(fwSettings);
@@ -108,7 +114,9 @@ function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 
   });
   const { x, y } = clampWidgetPosition(bounds.x, bounds.y, nextWidth, nextHeight, area);
   win.setBounds({ x, y, width: nextWidth, height: nextHeight });
-  applyWidgetLayerOrder(win, fw.layerOrder);
+  if (win.isVisible()) {
+    applyWidgetLayerOrder(win, fw.layerOrder);
+  }
 }
 
 function saveWidgetPosition(win, settingsStore) {
@@ -147,36 +155,56 @@ function attachWidgetPositionPersistence(win, settingsStore) {
   win.on('hide', () => saveWidgetPosition(win, settingsStore));
 }
 
+/**
+ * @returns {{ ok: boolean, effective: string, fallback?: boolean }}
+ */
 function applyWidgetLayerOrder(win, layerOrder = 'always-on-top') {
-  if (!win || win.isDestroyed()) return;
-  const fw = normalizeWidgetSettings({ layerOrder });
-  const bounds = win.getBounds();
-
-  if (fw.layerOrder === 'desktop') {
-    if (pinWidgetToDesktop(win)) return;
-    unpinWidgetFromDesktop(win);
-    win.setAlwaysOnTop(true, 'screen-saver');
-    win.setBounds(bounds);
-    return;
+  if (!win || win.isDestroyed()) {
+    return { ok: false, effective: layerOrder };
+  }
+  if (!win.isVisible()) {
+    return { ok: true, effective: layerOrder, deferred: true };
   }
 
-  unpinWidgetFromDesktop(win);
+  const fw = normalizeWidgetSettings({ layerOrder });
+  const shouldShow = win.isVisible();
+
+  if (fw.layerOrder === 'desktop') {
+    if (pinWidgetToDesktop(win, { shouldShow })) {
+      return { ok: true, effective: 'desktop' };
+    }
+    unpinWidgetFromDesktop(win, { shouldShow });
+    win.setAlwaysOnTop(true, 'screen-saver');
+    return { ok: false, effective: 'always-on-top', fallback: true };
+  }
+
+  if (isWidgetPinnedToDesktop(win)) {
+    unpinWidgetFromDesktop(win, { shouldShow });
+  }
   if (fw.layerOrder === 'always-on-top') {
     win.setAlwaysOnTop(true, 'screen-saver');
   } else {
     win.setAlwaysOnTop(false);
   }
-  win.setBounds(bounds);
+  return { ok: true, effective: fw.layerOrder };
 }
 
 function applyWidgetClickThrough(win, enabled, layerOrder = 'always-on-top') {
   if (!win || win.isDestroyed()) return;
-  const on = !!enabled;
-  win.setIgnoreMouseEvents(on, { forward: true });
-  applyWidgetLayerOrder(win, layerOrder);
+  win.setIgnoreMouseEvents(!!enabled, { forward: true });
+  if (win.isVisible()) {
+    applyWidgetLayerOrder(win, layerOrder);
+  }
 }
 
-function createFloatingWidget(fwSettings = {}, settingsStore = null) {
+function prepareWidgetForShow(win, settingsStore, initialFw = {}) {
+  const fw = readWidgetSettings(settingsStore, initialFw);
+  applyWidgetPosition(win, fw);
+  win.setIgnoreMouseEvents(!!fw.clickThrough, { forward: true });
+  applyWidgetLayerOrder(win, fw.layerOrder);
+}
+
+function createFloatingWidget(fwSettings = {}, settingsStore = null, { autoShow = false } = {}) {
   const fw = normalizeWidgetSettings(fwSettings);
   const { width, height } = computeWidgetBounds(fw, 1);
   const win = new BrowserWindow({
@@ -195,16 +223,20 @@ function createFloatingWidget(fwSettings = {}, settingsStore = null) {
     },
   });
   win.loadFile(path.join(__dirname, '../renderer/floating-widget/index.html'));
+
   win.once('ready-to-show', () => {
-    applyWidgetClickThrough(win, fw.clickThrough, fw.layerOrder);
-    applyWidgetPosition(win, fw);
+    prepareWidgetForShow(win, settingsStore, fw);
+    const current = readWidgetSettings(settingsStore, fw);
+    if (autoShow || current.enabled) {
+      win.show();
+    }
   });
+
   win.on('show', () => {
-    const current = settingsStore
-      ? normalizeWidgetSettings(settingsStore.get('floatingWidget'))
-      : fw;
+    const current = readWidgetSettings(settingsStore, fw);
     applyWidgetLayerOrder(win, current.layerOrder);
   });
+
   attachWidgetPositionPersistence(win, settingsStore);
   return win;
 }
@@ -249,6 +281,21 @@ function showPopover(getOrCreate, { onShow } = {}) {
   return win;
 }
 
+function revealFloatingWidget(win, settingsStore) {
+  const fw = readWidgetSettings(settingsStore);
+  const reveal = () => {
+    prepareWidgetForShow(win, settingsStore, fw);
+    win.show();
+  };
+  if (win.webContents.isLoading()) {
+    win.once('ready-to-show', reveal);
+  } else if (!win.isVisible()) {
+    reveal();
+  } else {
+    prepareWidgetForShow(win, settingsStore, fw);
+  }
+}
+
 function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }) {
   let win = getWin();
   if (!win || win.isDestroyed()) win = createWin();
@@ -257,12 +304,15 @@ function toggleFloatingWidget({ getWin, createWin, settings, providerCount = 1 }
     settings.set('floatingWidget.enabled', false);
   } else {
     const fw = normalizeWidgetSettings(settings.get('floatingWidget'));
-    applyWidgetClickThrough(win, fw.clickThrough, fw.layerOrder);
-    win.show();
-    applyWidgetLayerOrder(win, fw.layerOrder);
+    revealFloatingWidget(win, settings);
     settings.set('floatingWidget.enabled', true);
   }
   return win;
+}
+
+function resolveFloatingWidgetWindow(sender, floatingWin) {
+  return BrowserWindow.fromWebContents(sender)
+    || (floatingWin && !floatingWin.isDestroyed() ? floatingWin : null);
 }
 
 module.exports = {
@@ -274,6 +324,7 @@ module.exports = {
   showPopover,
   showSettings,
   toggleFloatingWidget,
+  revealFloatingWidget,
   applyWidgetWindowBounds,
   applyWidgetClickThrough,
   applyWidgetLayerOrder,
@@ -281,4 +332,5 @@ module.exports = {
   attachWidgetPositionPersistence,
   saveWidgetPosition,
   positionNearTray,
+  resolveFloatingWidgetWindow,
 };

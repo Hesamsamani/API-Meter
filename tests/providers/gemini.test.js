@@ -25,6 +25,16 @@ test('parseGeminiBatchExecute strips XSS prefix and parses nested JSON', () => {
   assert.equal(quota.dayLimit, 1000);
 });
 
+test('parseGeminiBatchExecute prefers otAQ7b row over other rpc ids', () => {
+  const otInner = { dayUsed: 7, dayLimit: 1000 };
+  const otherInner = { dayUsed: 99, dayLimit: 1000 };
+  const body = `)]}'\n\n[["wrb.fr","otherRpc",${JSON.stringify(JSON.stringify(otherInner))},null,null],["wrb.fr","otAQ7b",${JSON.stringify(JSON.stringify(otInner))},null,null]]`;
+  const parsed = parseGeminiBatchExecute(body);
+  const quota = extractGeminiQuota(parsed);
+  assert.equal(quota.dayUsed, 7);
+  assert.equal(quota.dayLimit, 1000);
+});
+
 test('parseGeminiBatchExecute skips Google length-prefixed batchexecute lines', () => {
   const inner = { dayUsed: 42, dayLimit: 1000 };
   const json = `[["wrb.fr","otAQ7b",${JSON.stringify(JSON.stringify(inner))},null,null]]`;

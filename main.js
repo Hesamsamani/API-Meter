@@ -22,6 +22,7 @@ const {
 } = require('./src/main/windows');
 const {
   normalizeWidgetSettings,
+  normalizeLayerOrder,
   nextSize,
   prevSize,
   nextTheme,
@@ -46,10 +47,14 @@ let lastWidgetProviderCount = 1;
 function mergeSettingsPatch(patch = {}) {
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'floatingWidget' && value && typeof value === 'object') {
-      settings.set('floatingWidget', {
+      const merged = {
         ...settings.get('floatingWidget'),
         ...value,
-      });
+      };
+      if (Object.prototype.hasOwnProperty.call(value, 'layerOrder')) {
+        merged.layerOrder = normalizeLayerOrder(value.layerOrder);
+      }
+      settings.set('floatingWidget', merged);
       continue;
     }
     if (key === 'alerts' && value && typeof value === 'object') {
@@ -112,7 +117,19 @@ function applySettingsPatch(patch) {
       applyWidgetClickThrough(floatingWin, fw.clickThrough, fw.layerOrder);
     }
     if (Object.prototype.hasOwnProperty.call(patch.floatingWidget, 'layerOrder')) {
-      applyWidgetLayerOrder(floatingWin, fw.layerOrder);
+      const layerResult = applyWidgetLayerOrder(floatingWin, fw.layerOrder);
+      if (layerResult.fallback) {
+        settings.set('floatingWidget', {
+          ...settings.get('floatingWidget'),
+          layerOrder: layerResult.effective,
+        });
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'API-Meter',
+            body: 'Desktop draw order is unavailable on this system. Using Always on top.',
+          }).show();
+        }
+      }
     }
     if (floatingWin.isVisible()) {
       applyWidgetWindowBounds(floatingWin, fw, widgetProviderCountForBounds());
@@ -223,7 +240,13 @@ function registerIpc() {
       },
       settings,
     });
+    broadcastSettings();
     return settings.get('floatingWidget.enabled');
+  });
+
+  ipcMain.handle('widget:setLayerOrder', (_e, layerOrder) => {
+    applySettingsPatch({ floatingWidget: { layerOrder } });
+    return settings.get('floatingWidget.layerOrder');
   });
 
   ipcMain.handle('widget:fitWindow', (e, providerCount = 1, orbSlots = 0) => {
@@ -402,8 +425,7 @@ app.whenReady().then(() => {
   });
 
   if (settings.get('floatingWidget.enabled')) {
-    floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings);
-    floatingWin.show();
+    floatingWin = createFloatingWidget(settings.get('floatingWidget'), settings, { autoShow: true });
   }
 });
 

@@ -109,6 +109,14 @@ function statsHtml(snapshot, variant) {
   }).join('');
 }
 
+function staleErrorHtml(snapshot, { onRetry } = {}) {
+  if (!snapshot?.error || !snapshot.windows?.length) return '';
+  const retry = onRetry
+    ? '<button class="retry-btn retry-btn--inline" type="button">Retry</button>'
+    : '';
+  return `<p class="card-stale-error">${snapshot.error}${retry ? ` ${retry}` : ''}</p>`;
+}
+
 function bindEmptyCardActions(el, snapshot, { onLogin, onRetry } = {}) {
   const needsLogin = isLoginRequired(snapshot);
   const hasError = snapshot?.error && !needsLogin;
@@ -171,6 +179,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
     </div>
     <div class="gauge-wrap"></div>
     <div class="stats">${statsHtml(snapshot, variant)}</div>
+    ${staleErrorHtml(snapshot, { onRetry })}
     <span class="badge ${badge.cls}">${badge.text}</span>
   `;
 
@@ -179,7 +188,20 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   );
 
   if (onClick) el.addEventListener('click', () => onClick(snapshot));
+  bindStaleErrorActions(el, snapshot, { onRetry });
   return el;
+}
+
+function bindStaleErrorActions(el, snapshot, { onRetry } = {}) {
+  const hasStaleError = snapshot?.error && snapshot.windows?.length;
+  const retryBtn = el.querySelector('.retry-btn--inline');
+  if (hasStaleError && onRetry && retryBtn && !retryBtn.dataset.bound) {
+    retryBtn.dataset.bound = '1';
+    retryBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onRetry();
+    });
+  }
 }
 
 function buildEmptyCard(meta, snapshot, { onLogin, onRetry } = {}) {
@@ -299,6 +321,19 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry, ga
   const stats = el.querySelector('.stats');
   if (stats) stats.innerHTML = statsHtml(snapshot, variant);
 
+  let staleError = el.querySelector('.card-stale-error');
+  const staleMarkup = staleErrorHtml(snapshot, { onRetry });
+  if (staleMarkup) {
+    if (staleError) {
+      staleError.outerHTML = staleMarkup;
+    } else if (stats) {
+      stats.insertAdjacentHTML('afterend', staleMarkup);
+    }
+    bindStaleErrorActions(el, snapshot, { onRetry });
+  } else if (staleError) {
+    staleError.remove();
+  }
+
   const badgeEl = el.querySelector('.badge');
   if (badgeEl) {
     badgeEl.textContent = badge.text;
@@ -331,10 +366,13 @@ export function renderSnapshotRow(snapshot, { onLogin, onRetry } = {}) {
   const colorClass = hasWindows ? thresholdClass(colorUtil) : 'muted';
 
   const statLine = hasWindows
-    ? snapshot.windows.slice(0, 2).map((w) => {
-        const reset = formatCountdown(w.resetsAt);
-        return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
-      }).join(' · ')
+    ? [
+        snapshot.windows.slice(0, 2).map((w) => {
+          const reset = formatCountdown(w.resetsAt);
+          return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
+        }).join(' · '),
+        snapshot.error || '',
+      ].filter(Boolean).join(' · ')
     : (needsLogin
       ? (snapshot?.error || 'Login required — click to connect')
       : (snapshot?.error || 'Awaiting data…'));
@@ -377,10 +415,13 @@ export function updateSnapshotRow(el, snapshot, { onLogin, onRetry } = {}) {
   const colorClass = hasWindows ? thresholdClass(colorUtil) : 'muted';
 
   const statLine = hasWindows
-    ? snapshot.windows.slice(0, 2).map((w) => {
-        const reset = formatCountdown(w.resetsAt);
-        return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
-      }).join(' · ')
+    ? [
+        snapshot.windows.slice(0, 2).map((w) => {
+          const reset = formatCountdown(w.resetsAt);
+          return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
+        }).join(' · '),
+        snapshot.error || '',
+      ].filter(Boolean).join(' · ')
     : (needsLogin
       ? (snapshot?.error || 'Login required — click to connect')
       : (snapshot?.error || 'Awaiting data…'));
