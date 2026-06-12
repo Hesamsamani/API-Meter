@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   mapUsage,
   extractOrgId,
+  inferClaudePlan,
+  inferClaudePlanFromWindows,
   validateOrganizationsProbe,
   CLAUDE_COOKIE_NAMES,
 } from '../../src/providers/claude-ai.js';
@@ -42,6 +44,20 @@ test('validateOrganizationsProbe fails when org id missing', () => {
     validateOrganizationsProbe({ organizations: [] }),
     /sessionKey/i,
   );
+});
+
+test('inferClaudePlan reads rate_limit_tier and subscriptionType', () => {
+  assert.equal(inferClaudePlan({ rate_limit_tier: 'default_claude_ai_pro' }), 'Pro');
+  assert.equal(inferClaudePlan({ subscriptionType: 'max' }), 'Max');
+  assert.equal(inferClaudePlan({ account_type: 'team' }), 'Team');
+});
+
+test('inferClaudePlanFromWindows uses weekly window as paid signal', () => {
+  const windows = mapUsage({
+    five_hour: { utilization: 0, resets_at: '2026-06-11T12:00:00Z' },
+    seven_day: { utilization: 0, resets_at: '2026-06-18T12:00:00Z' },
+  });
+  assert.equal(inferClaudePlanFromWindows(windows), 'Pro');
 });
 
 test('mapUsage maps five_hour and seven_day windows', () => {

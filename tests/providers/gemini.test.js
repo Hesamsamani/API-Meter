@@ -4,8 +4,10 @@ import {
   parseGeminiBatchExecute,
   extractGeminiQuota,
   buildGeminiQuotaReqBody,
+  inferGeminiPlan,
   GEMINI_QUOTA_BATCH_URL,
 } from '../../src/providers/gemini.js';
+import { extractGeminiPageTokens } from '../../src/shared/gemini-page-tokens.js';
 
 test('buildGeminiQuotaReqBody encodes otAQ7b batchexecute payload', () => {
   const body = buildGeminiQuotaReqBody();
@@ -33,6 +35,26 @@ test('parseGeminiBatchExecute prefers otAQ7b row over other rpc ids', () => {
   const quota = extractGeminiQuota(parsed);
   assert.equal(quota.dayUsed, 7);
   assert.equal(quota.dayLimit, 1000);
+});
+
+test('extractGeminiPageTokens reads SNlM0e, FdrFJe, and bl from page HTML', () => {
+  const html = '"SNlM0e":"abc123","FdrFJe":"1234567890","bl":"boq_assistant-bard-web-server_20260101.00_p0"';
+  const tokens = extractGeminiPageTokens(html);
+  assert.equal(tokens.at, 'abc123');
+  assert.equal(tokens.sid, '1234567890');
+  assert.match(tokens.bl, /boq_assistant-bard-web-server_/);
+});
+
+test('extractGeminiQuota parses nested numeric pair arrays', () => {
+  const quota = extractGeminiQuota([null, [12, 1000]]);
+  assert.equal(quota.dayUsed, 12);
+  assert.equal(quota.dayLimit, 1000);
+});
+
+test('inferGeminiPlan maps tier and limit hints', () => {
+  assert.equal(inferGeminiPlan({ tier: 'ultra' }), 'Ultra');
+  assert.equal(inferGeminiPlan({ dayLimit: 50 }), 'Free');
+  assert.equal(inferGeminiPlan({ dayLimit: 1000 }), 'AI Pro');
 });
 
 test('parseGeminiBatchExecute skips Google length-prefixed batchexecute lines', () => {

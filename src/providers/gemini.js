@@ -63,12 +63,54 @@ function toFiniteNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function quotaPairFromArray(node) {
+  if (!Array.isArray(node)) return null;
+  const nums = node.map(toFiniteNumber).filter((n) => n != null);
+  if (nums.length >= 2) {
+    return { used: nums[0], limit: nums[1] };
+  }
+  for (const item of node) {
+    const hit = quotaPairFromArray(item);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function normalizeQuotaShape(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const used = toFiniteNumber(raw.dayUsed ?? raw.used ?? raw.promptCount ?? raw.requestCount);
+  const limit = toFiniteNumber(raw.dayLimit ?? raw.limit ?? raw.promptLimit ?? raw.requestLimit);
+  if (used != null || limit != null) {
+    return { ...raw, dayUsed: used ?? raw.dayUsed, dayLimit: limit ?? raw.dayLimit };
+  }
+  return raw;
+}
+
 function quotaHasUsage(quota) {
   if (!quota || typeof quota !== 'object') return false;
-  return toFiniteNumber(quota.dayUsed) != null
-    || toFiniteNumber(quota.dayLimit) != null
-    || toFiniteNumber(quota.used) != null
-    || toFiniteNumber(quota.limit) != null;
+  const normalized = normalizeQuotaShape(quota);
+  return toFiniteNumber(normalized.dayUsed) != null
+    || toFiniteNumber(normalized.dayLimit) != null
+    || toFiniteNumber(normalized.used) != null
+    || toFiniteNumber(normalized.limit) != null;
+}
+
+function inferGeminiPlan(quota = {}) {
+  const tier = String(
+    quota.plan
+    || quota.tier
+    || quota.subscriptionTier
+    || quota.subscription_tier
+    || quota.productTier
+    || '',
+  ).toLowerCase();
+  if (/ultra|advanced/i.test(tier)) return 'Ultra';
+  if (/pro/i.test(tier)) return 'AI Pro';
+  if (/free/i.test(tier)) return 'Free';
+  const limit = toFiniteNumber(quota.dayLimit ?? quota.limit);
+  if (limit != null && limit >= 1000) return 'AI Pro';
+  if (limit != null && limit > 0 && limit < 100) return 'Free';
+  return 'AI Pro';
 }
 
 function parseGeminiBatchRows(outer) {
@@ -124,6 +166,8 @@ function extractGeminiQuota(inner) {
   const walk = (node) => {
     if (!node) return null;
     if (Array.isArray(node)) {
+      const pair = quotaPairFromArray(node);
+      if (pair) return normalizeQuotaShape(pair);
       for (const item of node) {
         const hit = walk(item);
         if (hit) return hit;
@@ -131,9 +175,9 @@ function extractGeminiQuota(inner) {
       return null;
     }
     if (typeof node === 'object') {
-      if (toFiniteNumber(node.dayUsed) != null || toFiniteNumber(node.dayLimit) != null) return node;
-      if (toFiniteNumber(node.used) != null || toFiniteNumber(node.limit) != null) return node;
-      if (node.quota) return node.quota;
+      const direct = normalizeQuotaShape(node);
+      if (quotaHasUsage(direct)) return direct;
+      if (node.quota) return walk(node.quota);
       for (const value of Object.values(node)) {
         const hit = walk(value);
         if (hit) return hit;
@@ -178,12 +222,13 @@ async function fetchLiveGemini() {
   if (!quotaHasUsage(quota)) {
     throw new Error('Gemini batchexecute: quota data not found');
   }
-  const dayUsed = toFiniteNumber(quota.dayUsed ?? quota.used) ?? 0;
-  const dayLimit = toFiniteNumber(quota.dayLimit ?? quota.limit) ?? AI_PRO_DAILY_LIMIT;
+  const normalized = normalizeQuotaShape(quota);
+  const dayUsed = toFiniteNumber(normalized.dayUsed ?? normalized.used) ?? 0;
+  const dayLimit = toFiniteNumber(normalized.dayLimit ?? normalized.limit) ?? AI_PRO_DAILY_LIMIT;
   return {
     providerId: 'gemini',
     source: 'live',
-    plan: 'AI Pro',
+    plan: inferGeminiPlan(normalized),
     windows: [{
       key: 'day',
       label: 'DAY',
@@ -241,7 +286,7 @@ function createGeminiAdapter() {
         return local;
       }
     },
-    detectPlan() { return 'AI Pro'; },
+    detectPlan(snap) { return snap?.plan || 'AI Pro'; },
   };
 }
 
@@ -250,6 +295,8 @@ module.exports = {
   parseGeminiBatchExecute,
   extractGeminiQuota,
   quotaHasUsage,
+  inferGeminiPlan,
+  normalizeQuotaShape,
   mapLocalGemini,
   buildGeminiQuotaReqBody,
   GEMINI_QUOTA_BATCH_URL,

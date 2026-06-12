@@ -3,6 +3,7 @@
  */
 const { BrowserWindow } = require('electron');
 const { CHROME_UA } = require('../shared/ua');
+const { extractGeminiPageTokens } = require('../shared/gemini-page-tokens');
 const { PARTITION } = require('./provider-session');
 
 const BLOCKED_SIGNATURES = [
@@ -144,27 +145,25 @@ function postViaWindow(
       try {
         const responseText = await win.webContents.executeJavaScript(
           `(async () => {
+            const extractTokens = ${extractGeminiPageTokens.toString()};
             let postBody = ${JSON.stringify(body)};
+            let requestUrl = ${JSON.stringify(postUrl)};
             if (${appendGoogleAtToken}) {
               const html = document.documentElement.innerHTML;
-              const patterns = [
-                /"SNlM0e":"([^"]+)"/,
-                /SNlM0e\\\\":\\\\"([^\\\\"]+)\\\\"/,
-                /SNlM0e":"([^"]+)"/,
-              ];
-              let atToken = null;
-              for (const pattern of patterns) {
-                const match = html.match(pattern);
-                if (match?.[1]) {
-                  atToken = match[1];
-                  break;
-                }
+              const { at, sid, bl } = extractTokens(html);
+              if (at && !postBody.includes('at=')) {
+                postBody += '&at=' + encodeURIComponent(at);
               }
-              if (atToken && !postBody.includes('at=')) {
-                postBody += '&at=' + encodeURIComponent(atToken);
+              if (!at) {
+                throw new Error('Gemini page token missing (SNlM0e) — open gemini.google.com while signed in');
               }
+              const url = new URL(requestUrl);
+              if (sid && !url.searchParams.has('f.sid')) url.searchParams.set('f.sid', sid);
+              if (bl && !url.searchParams.has('bl')) url.searchParams.set('bl', bl);
+              if (!url.searchParams.has('hl')) url.searchParams.set('hl', 'en');
+              requestUrl = url.toString();
             }
-            const resp = await fetch(${JSON.stringify(postUrl)}, {
+            const resp = await fetch(requestUrl, {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
@@ -193,7 +192,10 @@ function postViaWindow(
       finish(reject, new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
     });
 
-    win.loadURL(originUrl);
+    const loadUrl = appendGoogleAtToken && !originUrl.includes('/app')
+      ? originUrl.replace(/\/?$/, '/app')
+      : originUrl;
+    win.loadURL(loadUrl);
   });
 }
 

@@ -34,7 +34,65 @@ function mapUsage(body) {
       resetsAt: body.seven_day.resets_at,
     });
   }
+  if (body.seven_day_sonnet) {
+    windows.push({
+      key: 'seven_day_sonnet',
+      label: 'SONNET',
+      utilization: clampPercent(body.seven_day_sonnet.utilization),
+      resetsAt: body.seven_day_sonnet.resets_at,
+    });
+  }
+  if (body.seven_day_opus) {
+    windows.push({
+      key: 'seven_day_opus',
+      label: 'OPUS',
+      utilization: clampPercent(body.seven_day_opus.utilization),
+      resetsAt: body.seven_day_opus.resets_at,
+    });
+  }
   return windows;
+}
+
+function firstOrgRecord(orgs) {
+  if (!orgs) return null;
+  if (Array.isArray(orgs)) return orgs.find((o) => o && typeof o === 'object') || null;
+  if (typeof orgs === 'object') {
+    const list = orgs.organizations || orgs.data || orgs.items;
+    if (Array.isArray(list)) return list.find((o) => o && typeof o === 'object') || null;
+    return orgs;
+  }
+  return null;
+}
+
+function inferClaudePlan(...sources) {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    const tier = source.rate_limit_tier
+      || source.subscriptionType
+      || source.subscription_type
+      || source.account_type
+      || source.plan_type
+      || source.membership
+      || source.plan
+      || source.tier
+      || '';
+    const t = String(tier).toLowerCase();
+    if (/enterprise/i.test(t)) return 'Enterprise';
+    if (/max/i.test(t)) return 'Max';
+    if (/team/i.test(t)) return 'Team';
+    if (/pro|default_claude_ai_pro/i.test(t)) return 'Pro';
+    if (/free/i.test(t)) return 'Free';
+  }
+  return null;
+}
+
+function inferClaudePlanFromWindows(windows = []) {
+  const keys = new Set(windows.map((w) => w.key));
+  if (keys.has('seven_day') || keys.has('seven_day_sonnet') || keys.has('seven_day_opus')) {
+    return 'Pro';
+  }
+  if (keys.has('five_hour')) return 'Free';
+  return null;
 }
 
 /**
@@ -102,12 +160,22 @@ async function fetchWithSession(sessionKey) {
   const orgs = await fetchViaWindow('https://claude.ai/api/organizations');
   const orgId = extractOrgId(orgs);
   if (!orgId) throw new Error('Claude.ai session expired — re-login required');
+  const orgRecord = firstOrgRecord(orgs);
   const usage = await fetchViaWindow(`https://claude.ai/api/organizations/${orgId}/usage`);
+  let account = null;
+  try {
+    account = await fetchViaWindow('https://claude.ai/api/account');
+  } catch {
+    /* account endpoint is optional */
+  }
+  const windows = mapUsage(usage);
+  const plan = inferClaudePlan(usage, account, orgRecord)
+    || inferClaudePlanFromWindows(windows);
   return {
     providerId: 'claude-ai',
     source: 'live',
-    plan: null,
-    windows: mapUsage(usage),
+    plan,
+    windows,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -150,8 +218,9 @@ function createClaudeAiAdapter() {
       return fetchWithSession(sessionKey);
     },
     detectPlan(snap) {
-      const wk = snap.windows.find((w) => w.key === 'seven_day');
-      return wk && wk.utilization > 0 ? 'Pro/Max' : null;
+      return snap?.plan
+        || inferClaudePlan(snap)
+        || inferClaudePlanFromWindows(snap?.windows);
     },
   };
 }
@@ -161,6 +230,8 @@ module.exports = {
   mapUsage,
   ensureClaudeSession,
   extractOrgId,
+  inferClaudePlan,
+  inferClaudePlanFromWindows,
   validateOrganizationsProbe,
   CLAUDE_COOKIE_NAMES,
 };
