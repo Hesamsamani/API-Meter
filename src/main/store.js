@@ -18,6 +18,7 @@ const settings = new Store({
       opacity: 0.92,
       clickThrough: false,
       layerOrder: 'always-on-top',
+      desktopPinAvailable: null,
       position: null,
     },
     alerts: { enabled: true, warnThreshold: 75, dangerThreshold: 90 },

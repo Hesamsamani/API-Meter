@@ -37,6 +37,26 @@ function renderWidgetPins(pinned = []) {
   });
 }
 
+function updateLayerOrderUi(fw = {}) {
+  const select = document.getElementById('widget-layer-order');
+  const hint = document.getElementById('widget-layer-order-hint');
+  const desktopOption = select?.querySelector('option[value="desktop"]');
+  const unavailable = fw.desktopPinAvailable === false;
+
+  if (desktopOption) {
+    desktopOption.disabled = unavailable;
+    desktopOption.hidden = unavailable;
+  }
+  if (select && unavailable && select.value === 'desktop') {
+    select.value = 'always-on-top';
+  }
+  if (hint) {
+    hint.textContent = unavailable
+      ? 'Desktop layer is not supported on this PC (Electron cannot pin to the Windows desktop here). Always on top is used instead.'
+      : 'Always on top keeps the widget visible above apps. Desktop layer pins behind windows and survives Show Desktop — use if the widget disappears.';
+  }
+}
+
 function populateForm(settings) {
   current = settings;
   const fw = settings.floatingWidget || {};
@@ -49,6 +69,7 @@ function populateForm(settings) {
   document.getElementById('danger-threshold').value = settings.alerts?.dangerThreshold ?? 90;
   document.getElementById('widget-auto-rotate').checked = fw.autoRotate === true;
   document.getElementById('widget-layer-order').value = fw.layerOrder || 'always-on-top';
+  updateLayerOrderUi(fw);
   document.getElementById('widget-click-through').checked = fw.clickThrough === true;
   document.getElementById('widget-display-mode').value = fw.displayMode || 'single';
   document.getElementById('widget-size').value = fw.size || 'medium';

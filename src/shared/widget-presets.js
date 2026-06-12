@@ -154,6 +154,7 @@ function normalizeWidgetSettings(fw = {}) {
     opacity: Number.isFinite(fw.opacity) ? Math.min(1, Math.max(0.5, fw.opacity)) : 0.92,
     clickThrough: fw.clickThrough === true,
     layerOrder: normalizeLayerOrder(fw.layerOrder),
+    desktopPinAvailable: typeof fw.desktopPinAvailable === 'boolean' ? fw.desktopPinAvailable : null,
     position: normalizeWidgetPosition(fw.position),
   };
 }

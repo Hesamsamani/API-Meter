@@ -68,6 +68,12 @@ test('normalizeWidgetSettings defaults layerOrder to always-on-top', () => {
   assert.equal(normalizeWidgetSettings({ layerOrder: 'bogus' }).layerOrder, 'always-on-top');
 });
 
+test('normalizeWidgetSettings preserves desktopPinAvailable when boolean', () => {
+  assert.equal(normalizeWidgetSettings({}).desktopPinAvailable, null);
+  assert.equal(normalizeWidgetSettings({ desktopPinAvailable: true }).desktopPinAvailable, true);
+  assert.equal(normalizeWidgetSettings({ desktopPinAvailable: false }).desktopPinAvailable, false);
+});
+
 test('normalizeWidgetSettings preserves saved widget position', () => {
   assert.equal(normalizeWidgetSettings({}).position, null);
   assert.deepEqual(

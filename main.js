@@ -30,6 +30,7 @@ const {
 } = require('./src/shared/widget-presets');
 const { applyLaunchAtStartup, syncLaunchAtStartup } = require('./src/main/startup');
 const { applyProviderLoginFailure } = require('./src/main/login-error');
+const { syncDesktopPinFromSettings } = require('./src/main/desktop-pin');
 
 let store;
 let scheduler;
@@ -119,16 +120,12 @@ function applySettingsPatch(patch) {
     if (Object.prototype.hasOwnProperty.call(patch.floatingWidget, 'layerOrder')) {
       const layerResult = applyWidgetLayerOrder(floatingWin, fw.layerOrder);
       if (layerResult.fallback) {
-        settings.set('floatingWidget', {
+        const nextFw = {
           ...settings.get('floatingWidget'),
           layerOrder: layerResult.effective,
-        });
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'API-Meter',
-            body: 'Desktop draw order is unavailable on this system. Using Always on top.',
-          }).show();
-        }
+        };
+        nextFw.desktopPinAvailable = false;
+        settings.set('floatingWidget', nextFw);
       }
     }
     if (floatingWin.isVisible()) {
@@ -341,7 +338,18 @@ function getSettingsWin(recreate = false) {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.apimeter.app');
+  }
   syncLaunchAtStartup(settings);
+  syncDesktopPinFromSettings(settings.get('floatingWidget'));
+  const fwBoot = normalizeWidgetSettings(settings.get('floatingWidget'));
+  if (fwBoot.layerOrder === 'desktop' && fwBoot.desktopPinAvailable === false) {
+    settings.set('floatingWidget', {
+      ...settings.get('floatingWidget'),
+      layerOrder: 'always-on-top',
+    });
+  }
 
   registry = createRegistry();
   store = new UsageStore();

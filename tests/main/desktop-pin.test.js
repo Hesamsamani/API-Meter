@@ -20,6 +20,10 @@ test('desktop-pin uses WorkerW spawn and SetParent', () => {
   assert.match(pinSrc, /SetWindowPos/);
   assert.match(pinSrc, /ShowWindow/);
   assert.match(pinSrc, /ScreenToClient/);
+  assert.match(pinSrc, /koffi\.encode\(point, 0, 'int32'/);
+  assert.match(pinSrc, /isWidgetPinnedToDesktop\(win\)/);
+  assert.match(pinSrc, /probeDesktopPinAvailable/);
+  assert.match(pinSrc, /getDesktopPinAvailable/);
 });
 
 test('floating widget applies configurable layer order on show', () => {

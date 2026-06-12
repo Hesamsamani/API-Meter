@@ -22,6 +22,8 @@ test('widget bounds handlers use last fit provider count', () => {
 test('settings patch normalizes layer order and handles desktop fallback', () => {
   assert.match(mainSrc, /normalizeLayerOrder/);
   assert.match(mainSrc, /layerResult\.fallback/);
+  assert.match(mainSrc, /desktopPinAvailable\s*=\s*false/);
+  assert.doesNotMatch(mainSrc, /Desktop draw order is unavailable/);
   assert.match(mainSrc, /autoShow:\s*true/);
   assert.match(mainSrc, /widget:setLayerOrder/);
 });

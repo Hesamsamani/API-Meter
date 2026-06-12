@@ -16,6 +16,8 @@ let lib = null;
 let api = null;
 let EnumWindowsProc = null;
 let cachedWorkerW = null;
+/** @type {boolean | undefined} undefined = not probed yet */
+let desktopPinProbeResult;
 
 /** Cast a BigInt HWND to the void * type koffi expects at FFI boundaries. */
 function asHwnd(hwnd) {
@@ -39,13 +41,14 @@ function loadApi() {
         'uintptr',
         ['void *', 'uint', 'uintptr', 'intptr', 'uint', 'uint', 'void *'],
       ),
-      SetParent: lib.func('SetParent', 'void *', ['void *', 'void *']),
+      SetParent: lib.func('SetParent', 'intptr', ['void *', 'void *']),
       IsWindow: lib.func('IsWindow', 'bool', ['void *']),
+      IsChild: lib.func('IsChild', 'bool', ['void *', 'void *']),
       EnumWindows: lib.func('EnumWindows', 'bool', [koffi.pointer(EnumWindowsProc), 'intptr']),
       ShowWindow: lib.func('ShowWindow', 'bool', ['void *', 'int']),
       SetWindowPos: lib.func('SetWindowPos', 'bool', ['void *', 'void *', 'int', 'int', 'int', 'int', 'uint']),
       ScreenToClient: lib.func('ScreenToClient', 'bool', ['void *', 'void *']),
-      GetParent: lib.func('GetParent', 'void *', ['void *']),
+      GetParent: lib.func('GetParent', 'intptr', ['void *']),
     };
     return api;
   } catch (err) {
@@ -56,6 +59,67 @@ function loadApi() {
 
 function isDesktopPinSupported() {
   return !!loadApi();
+}
+
+function getDesktopPinAvailable() {
+  return desktopPinProbeResult;
+}
+
+function setDesktopPinAvailable(value) {
+  desktopPinProbeResult = value === true;
+}
+
+function syncDesktopPinFromSettings(fw = {}) {
+  if (typeof fw.desktopPinAvailable === 'boolean') {
+    desktopPinProbeResult = fw.desktopPinAvailable;
+  }
+}
+
+/**
+ * Attempt a real pin/unpin cycle to see if Electron HWND parenting works on this PC.
+ * @param {import('electron').BrowserWindow} win
+ * @returns {boolean}
+ */
+function probeDesktopPinAvailable(win) {
+  if (platform !== 'win32' || !isDesktopPinSupported()) {
+    desktopPinProbeResult = false;
+    return false;
+  }
+  if (desktopPinProbeResult !== undefined) {
+    return desktopPinProbeResult;
+  }
+  if (!win || win.isDestroyed()) {
+    return false;
+  }
+
+  const wasVisible = win.isVisible();
+  const wasAlwaysOnTop = win.isAlwaysOnTop();
+  const wasPinned = isWidgetPinnedToDesktop(win);
+
+  if (!wasVisible) {
+    win.show();
+  }
+
+  let available = false;
+  try {
+    available = pinWidgetToDesktop(win, { shouldShow: true }) && isWidgetPinnedToDesktop(win);
+  } catch {
+    available = false;
+  }
+
+  if (isWidgetPinnedToDesktop(win)) {
+    unpinWidgetFromDesktop(win, { shouldShow: wasVisible || available });
+  }
+
+  if (!wasPinned) {
+    win.setAlwaysOnTop(wasAlwaysOnTop || !available, 'screen-saver');
+  }
+  if (!wasVisible && !available) {
+    win.hide();
+  }
+
+  desktopPinProbeResult = available;
+  return available;
 }
 
 function spawnDesktopWorker(user32, progman) {
@@ -124,17 +188,35 @@ function isWidgetPinnedToDesktop(win) {
   const workerW = findDesktopWorkerW();
   if (!workerW) return false;
   const parent = user32.GetParent(asHwnd(hwnd));
-  return parent === workerW;
+  if (hwndEquals(parent, workerW)) return true;
+  return user32.IsChild(asHwnd(workerW), asHwnd(hwnd));
+}
+
+function hwndEquals(a, b) {
+  const na = normalizeHwnd(a);
+  const nb = normalizeHwnd(b);
+  return na != null && nb != null && na === nb;
+}
+
+function normalizeHwnd(value) {
+  if (value == null || value === 0 || value === 0n) return null;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') return BigInt(value >>> 0);
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
 }
 
 function screenPointToWorkerClient(user32, workerW, screenX, screenY) {
   const point = koffi.alloc('int32', 2);
-  koffi.encode(point, 'int32', screenX, 0);
-  koffi.encode(point, 'int32', screenY, 4);
+  koffi.encode(point, 0, 'int32', screenX);
+  koffi.encode(point, 4, 'int32', screenY);
   user32.ScreenToClient(asHwnd(workerW), point);
   return {
-    x: koffi.decode(point, 'int32', 0),
-    y: koffi.decode(point, 'int32', 4),
+    x: koffi.decode(point, 0, 'int32'),
+    y: koffi.decode(point, 4, 'int32'),
   };
 }
 
@@ -175,7 +257,7 @@ function pinWidgetToDesktop(win, { shouldShow = true } = {}) {
     user32.SetParent(asHwnd(hwnd), asHwnd(workerW));
     restoreWidgetPlacement(user32, hwnd, workerW, bounds, { shouldShow });
     win.setAlwaysOnTop(false);
-    return user32.IsWindow(asHwnd(hwnd));
+    return isWidgetPinnedToDesktop(win);
   } catch (err) {
     console.error('desktop-pin: failed to pin widget', err);
     return false;
@@ -218,6 +300,10 @@ function unpinWidgetFromDesktop(win, { shouldShow = true } = {}) {
 
 module.exports = {
   isDesktopPinSupported,
+  getDesktopPinAvailable,
+  setDesktopPinAvailable,
+  syncDesktopPinFromSettings,
+  probeDesktopPinAvailable,
   pinWidgetToDesktop,
   unpinWidgetFromDesktop,
   isWidgetPinnedToDesktop,

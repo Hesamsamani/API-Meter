@@ -1,7 +1,14 @@
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 const { getPreloadPath } = require('./assets');
-const { pinWidgetToDesktop, unpinWidgetFromDesktop, isWidgetPinnedToDesktop } = require('./desktop-pin');
+const {
+  pinWidgetToDesktop,
+  unpinWidgetFromDesktop,
+  isWidgetPinnedToDesktop,
+  getDesktopPinAvailable,
+  setDesktopPinAvailable,
+  probeDesktopPinAvailable,
+} = require('./desktop-pin');
 const {
   normalizeWidgetSettings,
   computeWidgetBounds,
@@ -170,10 +177,17 @@ function applyWidgetLayerOrder(win, layerOrder = 'always-on-top') {
   const shouldShow = win.isVisible();
 
   if (fw.layerOrder === 'desktop') {
+    const knownAvailable = getDesktopPinAvailable();
+    if (knownAvailable === false) {
+      win.setAlwaysOnTop(true, 'screen-saver');
+      return { ok: false, effective: 'always-on-top', fallback: true, reason: 'unavailable' };
+    }
     if (pinWidgetToDesktop(win, { shouldShow })) {
+      setDesktopPinAvailable(true);
       return { ok: true, effective: 'desktop' };
     }
     unpinWidgetFromDesktop(win, { shouldShow });
+    setDesktopPinAvailable(false);
     win.setAlwaysOnTop(true, 'screen-saver');
     return { ok: false, effective: 'always-on-top', fallback: true };
   }
@@ -187,6 +201,21 @@ function applyWidgetLayerOrder(win, layerOrder = 'always-on-top') {
     win.setAlwaysOnTop(false);
   }
   return { ok: true, effective: fw.layerOrder };
+}
+
+function ensureDesktopPinProbed(win, settingsStore) {
+  if (!win || win.isDestroyed() || !settingsStore) return getDesktopPinAvailable();
+  const fw = settingsStore.get('floatingWidget') || {};
+  if (typeof fw.desktopPinAvailable === 'boolean') {
+    setDesktopPinAvailable(fw.desktopPinAvailable);
+    return fw.desktopPinAvailable;
+  }
+  const available = probeDesktopPinAvailable(win);
+  settingsStore.set('floatingWidget', {
+    ...fw,
+    desktopPinAvailable: available,
+  });
+  return available;
 }
 
 function applyWidgetClickThrough(win, enabled, layerOrder = 'always-on-top') {
@@ -234,6 +263,7 @@ function createFloatingWidget(fwSettings = {}, settingsStore = null, { autoShow 
 
   win.on('show', () => {
     const current = readWidgetSettings(settingsStore, fw);
+    ensureDesktopPinProbed(win, settingsStore);
     applyWidgetLayerOrder(win, current.layerOrder);
   });
 
