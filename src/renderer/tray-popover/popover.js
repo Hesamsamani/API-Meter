@@ -6,6 +6,7 @@ import {
   worstUtil,
 } from '../shared/provider-card.js';
 import { setAlertThresholds } from '../shared/alert-thresholds.js';
+import { setUsageDisplayMode, worstDisplayPercent } from '../shared/usage-display.js';
 
 const container = document.getElementById('popover-cards');
 const lastFingerprints = new Map();
@@ -67,7 +68,7 @@ function renderPopover(data) {
   const snaps = lastUsage;
   const sorted = getVisibleOrder(appSettings)
     .map((id) => snaps[id] || { providerId: id, source: 'stale', windows: [], error: 'Awaiting…' })
-    .sort((a, b) => worstUtil(b) - worstUtil(a));
+    .sort((a, b) => worstDisplayPercent(b) - worstDisplayPercent(a));
 
   const fragment = document.createDocumentFragment();
   sorted.forEach((snap) => {
@@ -108,12 +109,18 @@ async function init() {
   try {
     appSettings = await window.apiMeter.getSettings();
     setAlertThresholds(appSettings.alerts);
+    setUsageDisplayMode(appSettings.usageDisplayMode);
   } catch { /* ignore */ }
 
   window.apiMeter.onUsageUpdated(renderPopover);
   window.apiMeter.onSettingsUpdated?.((data) => {
+    const prevMode = appSettings.usageDisplayMode;
     appSettings = data || appSettings;
     setAlertThresholds(appSettings.alerts);
+    setUsageDisplayMode(appSettings.usageDisplayMode);
+    if (prevMode !== appSettings.usageDisplayMode) {
+      lastFingerprints.clear();
+    }
     renderPopover(lastUsage);
   });
 

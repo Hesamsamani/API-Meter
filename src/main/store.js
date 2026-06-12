@@ -5,6 +5,7 @@ const settings = new Store({
   defaults: {
     refreshIntervalMinutes: 5,
     autoRefreshEnabled: true,
+    usageDisplayMode: 'used',
     theme: 'dark',
     launchAtStartup: false,
     floatingWidget: {

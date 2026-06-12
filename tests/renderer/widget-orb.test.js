@@ -15,11 +15,11 @@ test('orb uses concentric inner and outer rings for dual windows', () => {
   assert.match(orbSrc, /renderConcentricOrb/);
 });
 
-test('orb legends show per-window remaining labels', () => {
+test('orb legends respect usage display mode', () => {
   assert.match(orbSrc, /widget-orb__legends/);
   assert.match(orbSrc, /widget-orb__legend--\$\{layer\}/);
-  assert.match(orbSrc, /'inner'/);
-  assert.match(orbSrc, /'outer'/);
+  assert.match(orbSrc, /displayPercent/);
+  assert.match(orbSrc, /getUsageDisplayMode/);
 });
 
 test('orb sizes are larger than old compact layout', () => {

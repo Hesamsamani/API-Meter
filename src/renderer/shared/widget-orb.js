@@ -1,15 +1,17 @@
 import { PROVIDER_META, isLoginRequired } from './provider-card.js';
 import { thresholdClass } from './alert-thresholds.js';
+import {
+  displayFillPercent,
+  displayPercent,
+  formatWindowPercent,
+  getUsageDisplayMode,
+} from './usage-display.js';
 
 const ORB_SIZE = { small: 52, medium: 64, large: 76 };
 
 function providerLogoSrc(providerId) {
   if (!providerId) return '';
   return new URL(`../assets/providers/${providerId}.png`, window.location.href).href;
-}
-
-function remainingPercent(utilization = 0) {
-  return Math.max(0, Math.min(100, 100 - (utilization || 0)));
 }
 
 function orbWindows(snap) {
@@ -37,9 +39,9 @@ function logoHtml(meta, providerId, size) {
     </div>`;
 }
 
-function ringLayer({ cx, radius, stroke, remaining, utilization, gradId, layer }) {
+function ringLayer({ cx, radius, stroke, fillPercent, utilization, gradId, layer }) {
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (remaining / 100) * circumference;
+  const offset = circumference - (fillPercent / 100) * circumference;
   const colorClass = thresholdClass(utilization);
   return `
     <circle class="widget-orb__ring-bg widget-orb__ring-bg--${layer}" cx="${cx}" cy="${cx}" r="${radius}" stroke-width="${stroke}" />
@@ -63,8 +65,8 @@ function concentricSvg(windows, size, accent, needsLogin) {
   const gradId = `orb-${Math.random().toString(36).slice(2, 9)}`;
   const inner = windows[0];
   const outer = windows[1];
-  const innerRem = needsLogin ? 0 : remainingPercent(inner?.utilization);
-  const outerRem = needsLogin ? 0 : remainingPercent((outer || inner)?.utilization);
+  const innerFill = needsLogin ? 0 : displayFillPercent(inner?.utilization);
+  const outerFill = needsLogin ? 0 : displayFillPercent((outer || inner)?.utilization);
   const innerUtil = inner?.utilization ?? 0;
   const outerUtil = (outer || inner)?.utilization ?? 0;
 
@@ -75,7 +77,7 @@ function concentricSvg(windows, size, accent, needsLogin) {
       cx,
       radius: outerR,
       stroke,
-      remaining: outerRem,
+      fillPercent: outerFill,
       utilization: outerUtil,
       accent,
       gradId,
@@ -85,7 +87,7 @@ function concentricSvg(windows, size, accent, needsLogin) {
       cx,
       radius: innerR,
       stroke,
-      remaining: innerRem,
+      fillPercent: innerFill,
       utilization: innerUtil,
       accent,
       gradId,
@@ -96,7 +98,7 @@ function concentricSvg(windows, size, accent, needsLogin) {
       cx,
       radius: outerR,
       stroke,
-      remaining: innerRem,
+      fillPercent: innerFill,
       utilization: innerUtil,
       accent,
       gradId,
@@ -139,11 +141,12 @@ function legendHtml(windows, needsLogin) {
   }
 
   const items = windows.slice(0, 3).map((win, i) => {
-    const rem = remainingPercent(win.utilization);
+    const pct = Math.round(displayPercent(win.utilization));
     const layer = windows.length >= 2 ? (i === 0 ? 'inner' : i === 1 ? 'outer' : 'extra') : 'single';
     const colorClass = thresholdClass(win.utilization ?? 0);
+    const suffix = getUsageDisplayMode() === 'remaining' ? ' left' : '';
     return `<span class="widget-orb__legend widget-orb__legend--${layer} th-${colorClass}">
-      <span class="widget-orb__legend-dot"></span>${win.label} <b>${Math.round(rem)}%</b>
+      <span class="widget-orb__legend-dot"></span>${win.label} <b>${pct}%${suffix}</b>
     </span>`;
   });
 
@@ -183,7 +186,7 @@ function updateConcentricOrb(orbEl, snap, sizeKey) {
     return orbEl;
   }
 
-  const parts = windows.slice(0, 3).map((w) => `${w.label} ${Math.round(remainingPercent(w.utilization))}% left`);
+  const parts = windows.slice(0, 3).map((w) => formatWindowPercent(w));
   orbEl.title = `${meta.label}: ${parts.join(' · ')}`;
   animateRings(orbEl);
   return orbEl;
@@ -213,7 +216,7 @@ export function renderConcentricOrb(snap, { sizeKey = 'medium' } = {}) {
   `;
 
   if (!needsLogin && windows.length) {
-    const parts = windows.slice(0, 3).map((w) => `${w.label} ${Math.round(remainingPercent(w.utilization))}% left`);
+    const parts = windows.slice(0, 3).map((w) => formatWindowPercent(w));
     el.title = `${meta.label}: ${parts.join(' · ')}`;
   } else if (needsLogin) {
     el.title = snap.error || 'Click to connect';
@@ -277,4 +280,4 @@ export function countOrbSlots(providers, snapshots, placeholder) {
   return Math.max(1, providers.length);
 }
 
-export { ORB_SIZE, orbFingerprint, orbWindows, remainingPercent };
+export { ORB_SIZE, orbFingerprint, orbWindows };

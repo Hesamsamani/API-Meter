@@ -13,6 +13,11 @@ import {
   orbFingerprint,
 } from '../shared/widget-orb.js';
 import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
+import {
+  formatWindowPercentShort,
+  setUsageDisplayMode,
+  worstDisplayPercent,
+} from '../shared/usage-display.js';
 
 const root = document.getElementById('widget-root');
 const body = document.getElementById('widget-body');
@@ -214,7 +219,8 @@ function renderCompactRow(snap) {
   const hasWindows = (snap.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snap);
   const hasRetryableError = snap?.error && !hasWindows && !needsLogin;
-  const util = worstUtil(snap);
+  const util = worstDisplayPercent(snap);
+  const colorUtil = worstUtil(snap);
   const row = document.createElement('div');
   row.className = 'widget-compact-row';
   if (needsLogin || hasRetryableError) row.classList.add('widget-compact-row--actionable');
@@ -223,9 +229,9 @@ function renderCompactRow(snap) {
   row.innerHTML = `
     <span class="widget-compact-name">${meta.label}</span>
     <span class="widget-compact-stats">${hasWindows
-      ? snap.windows.slice(0, 2).map((w) => `${w.label} ${w.utilization}%`).join(' · ')
+      ? snap.windows.slice(0, 2).map((w) => formatWindowPercentShort(w)).join(' · ')
       : (needsLogin ? (snap.error || 'Login required') : (snap.error || '—'))}</span>
-    <span class="widget-compact-pct th-${hasWindows ? thresholdClass(util) : 'muted'}">${hasWindows ? `${util}%` : '—'}</span>
+    <span class="widget-compact-pct th-${hasWindows ? thresholdClass(colorUtil) : 'muted'}">${hasWindows ? `${util}%` : '—'}</span>
   `;
   if (needsLogin) {
     row.title = 'Click to connect';
@@ -429,8 +435,13 @@ function onUsageUpdate(data) {
 }
 
 function onSettingsUpdate(data) {
+  const prevMode = settings.usageDisplayMode;
   settings = data || settings;
   setAlertThresholds(settings.alerts);
+  setUsageDisplayMode(settings.usageDisplayMode);
+  if (prevMode !== settings.usageDisplayMode) {
+    lastFingerprints.clear();
+  }
   if (!settings.floatingWidget?.enabled) {
     clearInterval(rotateTimer);
     rotateTimer = null;
@@ -564,6 +575,7 @@ async function init() {
   try {
     settings = await window.apiMeter.getSettings();
     setAlertThresholds(settings.alerts);
+    setUsageDisplayMode(settings.usageDisplayMode);
     snapshots = await window.apiMeter.getUsage();
   } catch { /* ignore */ }
 

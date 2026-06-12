@@ -32,6 +32,14 @@
       <section class="settings-section">
         <h2>Telemetry</h2>
         <label class="field-row">
+          <span>Usage display</span>
+          <select id="usage-display-mode">
+            <option value="used">Used (0% → 100%)</option>
+            <option value="remaining">Remaining (100% → 0%)</option>
+          </select>
+        </label>
+        <p class="field-hint">Controls gauges, widgets, tray tooltip, and charts. Alerts always fire on % used.</p>
+        <label class="field-row">
           <span>Refresh interval (minutes)</span>
           <input type="number" id="refresh-interval" min="1" max="60" step="1">
         </label>
@@ -98,7 +106,7 @@
           <input type="checkbox" id="widget-auto-rotate">
           <span>Auto-rotate (single mode, 10s)</span>
         </label>
-        <p class="field-hint">Pin providers for grid/list/orb modes. Orbs show logo + remaining % rings per limit (e.g. Claude 5H + 7D). Right-click widget for click-through. Use −/+ and ◐ for quick resize/theme.</p>
+        <p class="field-hint">Pin providers for grid/list/orb modes. Orbs show logo + per-limit rings (respects usage display above). Right-click widget for click-through. Use −/+ and ◐ for quick resize/theme.</p>
         <div class="widget-pin-grid" id="widget-pin-grid"></div>
       </section>
 

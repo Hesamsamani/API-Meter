@@ -1,11 +1,11 @@
 import { thresholdClass } from './alert-thresholds.js';
 
-export function renderGauge(utilization = 0, { size = 88, stroke = 6, variant = 'full' } = {}) {
+export function renderGauge(utilization = 0, { size = 88, stroke = 6, variant = 'full', colorUtil } = {}) {
   const clamped = Math.max(0, Math.min(100, utilization));
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
-  const colorClass = thresholdClass(clamped);
+  const colorClass = thresholdClass(Number.isFinite(colorUtil) ? colorUtil : clamped);
 
   const wrap = document.createElement('div');
   wrap.className = `gauge gauge--${variant}`;
@@ -38,7 +38,7 @@ export function renderGauge(utilization = 0, { size = 88, stroke = 6, variant = 
   return wrap;
 }
 
-export function updateGauge(gaugeEl, utilization) {
+export function updateGauge(gaugeEl, utilization, colorUtil) {
   const clamped = Math.max(0, Math.min(100, utilization));
   const ring = gaugeEl.querySelector('.gauge-ring-fg');
   const valueEl = gaugeEl.querySelector('.gauge-value');
@@ -46,7 +46,7 @@ export function updateGauge(gaugeEl, utilization) {
 
   const circumference = parseFloat(ring.getAttribute('stroke-dasharray'));
   const offset = circumference - (clamped / 100) * circumference;
-  const colorClass = thresholdClass(clamped);
+  const colorClass = thresholdClass(Number.isFinite(colorUtil) ? colorUtil : clamped);
 
   ring.style.strokeDashoffset = offset;
   ring.className = `gauge-ring-fg stroke-${colorClass}`;

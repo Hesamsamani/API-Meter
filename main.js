@@ -76,7 +76,7 @@ function flushUsageBroadcast() {
       win.webContents.send('usage:updated', payload);
     }
   }
-  trayApi?.update(payload, settings.get('alerts'));
+  trayApi?.update(payload, settings.get('alerts'), settings.get('usageDisplayMode'));
   evaluateAlerts(payload);
 }
 
@@ -128,6 +128,7 @@ function broadcastSettings() {
     }
   }
   trayApi?.rebuildMenu?.();
+  trayApi?.update(store.getAll(), settings.get('alerts'), settings.get('usageDisplayMode'));
 }
 
 function seedStore() {

@@ -10,6 +10,12 @@ import {
   worstUtil,
 } from '../shared/provider-card.js';
 import { setAlertThresholds, thresholdClass } from '../shared/alert-thresholds.js';
+import {
+  displayFillPercent,
+  displayPercent,
+  setUsageDisplayMode,
+  worstDisplayPercent,
+} from '../shared/usage-display.js';
 
 const grid = document.getElementById('provider-grid');
 const detailPanel = document.getElementById('detail-panel');
@@ -148,7 +154,7 @@ function updateStatusLine() {
   const snaps = visibleOrder().map((id) => snapshots[id]).filter(Boolean);
   const live = snaps.filter((s) => s.source === 'live').length;
   const stale = snaps.filter((s) => s.source === 'stale').length;
-  const worst = snaps.reduce((max, s) => Math.max(max, worstUtil(s)), 0);
+  const worst = snaps.reduce((max, s) => Math.max(max, worstDisplayPercent(s)), 0);
   statusLine.textContent = `${live} live · ${stale} stale · peak ${worst}%`;
 }
 
@@ -193,10 +199,10 @@ async function refreshDetail(snapshot) {
           <div class="progress-row">
             <div class="progress-label">
               <span>${w.label}</span>
-              <span class="pct th-${thresholdClass(w.utilization)}">${w.utilization}%</span>
+              <span class="pct th-${thresholdClass(w.utilization)}">${Math.round(displayPercent(w.utilization))}%</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill ${thresholdClass(w.utilization)}" style="width:${w.utilization}%"></div>
+              <div class="progress-fill ${thresholdClass(w.utilization)}" style="width:${displayFillPercent(w.utilization)}%"></div>
             </div>
             ${w.resetsAt ? `<div class="reset-time">Resets in ${formatCountdown(w.resetsAt)}</div>` : ''}
           </div>
@@ -242,7 +248,10 @@ async function renderHistoryChart(providerId) {
   const colors = ['#22c55e', '#f59e0b', '#4285f4', '#d97757', '#7c3aed'];
   const datasets = windowKeys.map((key, i) => ({
     label: key.replace(/_/g, ' ').toUpperCase(),
-    data: filtered.map((e) => e.windows?.[key] ?? null),
+    data: filtered.map((e) => {
+      const raw = e.windows?.[key];
+      return raw == null ? null : displayPercent(raw);
+    }),
     borderColor: colors[i % colors.length],
     backgroundColor: 'transparent',
     borderWidth: 1.5,
@@ -281,14 +290,22 @@ async function renderHistoryChart(providerId) {
 
 function applySettings(settings) {
   const prevOrder = visibleOrder().join(',');
+  const prevMode = appSettings.usageDisplayMode;
   appSettings = settings || appSettings;
   setAlertThresholds(appSettings.alerts);
+  setUsageDisplayMode(appSettings.usageDisplayMode);
   syncAutoRefreshButton();
-  if (prevOrder !== visibleOrder().join(',')) {
+  const orderChanged = prevOrder !== visibleOrder().join(',');
+  const modeChanged = prevMode !== appSettings.usageDisplayMode;
+  if (orderChanged || modeChanged) {
     gridReady = false;
     lastFingerprints.clear();
+    lastDetailFingerprint = '';
   }
   if (Object.keys(snapshots).length) renderGrid(snapshots);
+  if (selectedId && snapshots[selectedId] && modeChanged) {
+    refreshDetail(snapshots[selectedId]);
+  }
 }
 
 async function init() {
@@ -316,6 +333,7 @@ async function init() {
   try {
     appSettings = await window.apiMeter.getSettings();
     setAlertThresholds(appSettings.alerts);
+    setUsageDisplayMode(appSettings.usageDisplayMode);
     syncAutoRefreshButton();
     const data = await window.apiMeter.getUsage();
     renderGrid(data);

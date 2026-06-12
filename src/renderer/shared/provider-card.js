@@ -1,6 +1,11 @@
 import { renderGauge, updateGauge } from './gauge.js';
 import { isAuthErrorMessage } from './auth-errors.js';
 import { thresholdClass } from './alert-thresholds.js';
+import {
+  displayPercent,
+  worstDisplayPercent,
+  formatWindowPercentShort,
+} from './usage-display.js';
 
 const PROVIDER_META = {
   'claude-ai': { label: 'Claude', accent: 'var(--claude-ai)', initials: 'CL' },
@@ -99,7 +104,8 @@ function statsHtml(snapshot, variant) {
   const limit = variant === 'mini' ? 2 : 3;
   return snapshot.windows.slice(0, limit).map((w) => {
     const reset = formatCountdown(w.resetsAt);
-    return `<span><strong>${w.label}</strong> ${w.utilization}%${reset ? ` · ${reset}` : ''}</span>`;
+    const pct = Math.round(displayPercent(w.utilization));
+    return `<span><strong>${w.label}</strong> ${pct}%${reset ? ` · ${reset}` : ''}</span>`;
   }).join('');
 }
 
@@ -147,8 +153,8 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
     return el;
   }
 
-  const primary = snapshot.windows[0];
-  const util = worstUtil(snapshot);
+  const util = worstDisplayPercent(snapshot);
+  const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const { size: gaugeSize, stroke: gaugeStroke } = resolveGaugeDims(variant, gauge);
 
@@ -169,7 +175,7 @@ export function renderProviderCard(snapshot, { onClick, variant = 'full', onLogi
   `;
 
   el.querySelector('.gauge-wrap').appendChild(
-    renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant })
+    renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant, colorUtil })
   );
 
   if (onClick) el.addEventListener('click', () => onClick(snapshot));
@@ -271,8 +277,8 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry, ga
     return el;
   }
 
-  const primary = snapshot.windows[0];
-  const util = worstUtil(snapshot);
+  const util = worstDisplayPercent(snapshot);
+  const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
   const gaugeEl = el.querySelector('.gauge');
   const gaugeWrap = el.querySelector('.gauge-wrap');
@@ -283,10 +289,10 @@ export function updateProviderCard(el, snapshot, { onClick, onLogin, onRetry, ga
     const currentStroke = Number(gaugeEl.querySelector('.gauge-ring-fg')?.getAttribute('stroke-width'));
     if ((currentSize !== gaugeSize || currentStroke !== gaugeStroke) && gaugeWrap) {
       gaugeWrap.replaceChildren(
-        renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant }),
+        renderGauge(util, { size: gaugeSize, stroke: gaugeStroke, variant, colorUtil }),
       );
     } else {
-      updateGauge(gaugeEl, util);
+      updateGauge(gaugeEl, util, colorUtil);
     }
   }
 
@@ -319,14 +325,15 @@ export function renderSnapshotRow(snapshot, { onLogin, onRetry } = {}) {
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
   const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
-  const util = worstUtil(snapshot);
+  const util = worstDisplayPercent(snapshot);
+  const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
-  const colorClass = hasWindows ? thresholdClass(util) : 'muted';
+  const colorClass = hasWindows ? thresholdClass(colorUtil) : 'muted';
 
   const statLine = hasWindows
     ? snapshot.windows.slice(0, 2).map((w) => {
         const reset = formatCountdown(w.resetsAt);
-        return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
+        return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
       }).join(' · ')
     : (needsLogin
       ? (snapshot?.error || 'Login required — click to connect')
@@ -364,14 +371,15 @@ export function updateSnapshotRow(el, snapshot, { onLogin, onRetry } = {}) {
   const hasWindows = (snapshot?.windows?.length ?? 0) > 0;
   const needsLogin = isLoginRequired(snapshot);
   const hasRetryableError = snapshot?.error && !hasWindows && !needsLogin;
-  const util = worstUtil(snapshot);
+  const util = worstDisplayPercent(snapshot);
+  const colorUtil = worstUtil(snapshot);
   const badge = sourceBadge(snapshot);
-  const colorClass = hasWindows ? thresholdClass(util) : 'muted';
+  const colorClass = hasWindows ? thresholdClass(colorUtil) : 'muted';
 
   const statLine = hasWindows
     ? snapshot.windows.slice(0, 2).map((w) => {
         const reset = formatCountdown(w.resetsAt);
-        return `${w.label} ${w.utilization}%${reset ? ` · ${reset}` : ''}`;
+        return `${formatWindowPercentShort(w)}${reset ? ` · ${reset}` : ''}`;
       }).join(' · ')
     : (needsLogin
       ? (snapshot?.error || 'Login required — click to connect')

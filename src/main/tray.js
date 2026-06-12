@@ -2,6 +2,7 @@ const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { worstUtilization, thresholdColor } = require('../shared/normalize');
+const { worstDisplayPercent, normalizeUsageDisplayMode } = require('../shared/usage-display');
 const { createTrayIconPng } = require('./tray-icon-buffer');
 
 const PROVIDER_LABELS = {
@@ -22,6 +23,15 @@ function worstUtilAcross(snapshots) {
   let worst = 0;
   for (const snap of Object.values(snapshots || {})) {
     worst = Math.max(worst, worstUtilization(snap));
+  }
+  return worst;
+}
+
+function worstDisplayAcross(snapshots, usageDisplayMode = 'used') {
+  const mode = normalizeUsageDisplayMode(usageDisplayMode);
+  let worst = 0;
+  for (const snap of Object.values(snapshots || {})) {
+    worst = Math.max(worst, worstDisplayPercent(snap, mode));
   }
   return worst;
 }
@@ -101,14 +111,15 @@ function worstStatusLevel(snapshots, alertSettings) {
   return thresholdColor(worst, warn, danger);
 }
 
-function buildTooltip(snapshots, alertSettings) {
-  const worst = worstUtilAcross(snapshots);
+function buildTooltip(snapshots, alertSettings, usageDisplayMode = 'used') {
+  const mode = normalizeUsageDisplayMode(usageDisplayMode);
+  const worst = worstDisplayAcross(snapshots, mode);
   const level = worstStatusLevel(snapshots, alertSettings);
   const statusWord = level === 'red' ? 'Critical' : level === 'amber' ? 'Warning' : 'OK';
   const parts = Object.values(snapshots || {})
-    .sort((a, b) => worstUtilization(b) - worstUtilization(a))
+    .sort((a, b) => worstDisplayPercent(b, mode) - worstDisplayPercent(a, mode))
     .slice(0, 3)
-    .map((s) => `${PROVIDER_LABELS[s.providerId] || s.providerId} ${worstUtilization(s)}%`);
+    .map((s) => `${PROVIDER_LABELS[s.providerId] || s.providerId} ${worstDisplayPercent(s, mode)}%`);
   const detail = parts.length ? parts.join(' · ') : 'No usage data yet';
   return worst > 0
     ? `API-Meter · Peak ${worst}% (${statusWord}) · ${detail}`
@@ -175,11 +186,11 @@ function createTray(handlers) {
   tray.setContextMenu(buildContextMenu(handlers));
 
   return {
-    update(snapshots, alertSettings) {
+    update(snapshots, alertSettings, usageDisplayMode = 'used') {
       const level = worstStatusLevel(snapshots, alertSettings);
-      const worst = worstUtilAcross(snapshots);
-      tray.setImage(createStatusIcon(level, worst));
-      tray.setToolTip(buildTooltip(snapshots, alertSettings));
+      const ringFill = worstDisplayAcross(snapshots, usageDisplayMode);
+      tray.setImage(createStatusIcon(level, ringFill));
+      tray.setToolTip(buildTooltip(snapshots, alertSettings, usageDisplayMode));
     },
     rebuildMenu() {
       tray.setContextMenu(buildContextMenu(handlers));
