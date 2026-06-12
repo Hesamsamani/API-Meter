@@ -89,7 +89,7 @@ function createSettingsWindow() {
 }
 
 function workAreaForBounds(bounds) {
-  return screen.getDisplayMatchingRect(bounds).workArea;
+  return screen.getDisplayMatching(bounds).workArea;
 }
 
 function applyWidgetWindowBounds(win, fwSettings, providerCount = 1, orbSlots = 0) {
