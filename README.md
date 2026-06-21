@@ -6,23 +6,25 @@
 
 <p align="center">
   <strong>One tray. Six providers. Zero tab-hopping.</strong><br>
-  A Windows system-tray command center for AI usage limits — Claude, Gemini, Grok, Cursor, Perplexity, and more.
+  A Windows tray command center for AI provider usage limits — Claude, Gemini, Grok, Cursor, and more.
 </p>
 
 <p align="center">
   <a href="https://github.com/Hesamsamani/API-Meter/releases/latest"><img src="https://img.shields.io/github/v/release/Hesamsamani/API-Meter?style=for-the-badge&label=%E2%AC%87%EF%B8%8F%20Download" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
-  <img src="https://img.shields.io/badge/Electron-28-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron">
+  <img src="https://img.shields.io/badge/Electron-34-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron">
   <img src="https://img.shields.io/badge/tests-152%20passing-22c55e?style=for-the-badge" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-e8e8ea?style=for-the-badge" alt="MIT">
 </p>
 
 <p align="center">
+  <a href="#-how-it-works">How it works</a> ·
   <a href="#-mission-control">Dashboard</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-supported-providers">Providers</a> ·
   <a href="#-authentication">Auth</a> ·
   <a href="#-install">Install</a> ·
+  <a href="#-architecture">Architecture</a> ·
   <a href="#-development">Develop</a>
 </p>
 
@@ -38,6 +40,55 @@ API-Meter lives in your **system tray** and polls provider dashboards on a sched
 | 📊 **Live quotas** | Parsed from official usage pages — not guessed from session counts |
 | 🔔 **Native alerts** | Warn / danger thresholds with Windows notifications |
 | 🔒 **Local-only auth** | Sessions stored in your Electron profile — never sent to a third party |
+
+---
+
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+  subgraph tray["System tray"]
+    T["Tray icon\n(ring gauge)"]
+    P["Popover snapshot"]
+  end
+
+  subgraph poll["Scheduled polling"]
+    S["Collector scheduler"]
+    A["Provider adapters"]
+  end
+
+  subgraph providers["Official dashboards"]
+    CL[Claude]
+    GE[Gemini]
+    GR[Grok]
+    CU[Cursor]
+    PE[Perplexity]
+  end
+
+  subgraph ui["Live UI"]
+    G["Gauges & cards"]
+    H["7-day history"]
+    W["Floating widget"]
+  end
+
+  subgraph alerts["Thresholds"]
+    N["Windows notifications"]
+  end
+
+  T --> S
+  S --> A
+  A --> CL & GE & GR & CU & PE
+  A --> G
+  G --> H
+  G --> W
+  G --> N
+  T -.-> P
+```
+
+1. **Tray-first** — API-Meter minimizes to the system tray; the ring icon reflects worst-case utilization across all providers.
+2. **Poll on schedule** — the collector scheduler fetches each enabled provider through its adapter (browser session, CLI token, or cookie import).
+3. **Parse & gauge** — usage pages are normalized into quota windows; gauges shift green → amber → red as limits fill.
+4. **Alert locally** — warn / danger thresholds fire native Windows notifications; history is stored in SQLite for dashboard charts.
 
 ---
 
@@ -222,6 +273,61 @@ npm run build:win  # → dist/API-Meter 0.1.0.exe
 ```
 
 **Requirements:** Node.js 18+, Windows 10/11.
+
+---
+
+## 🏗 Architecture
+
+```mermaid
+flowchart LR
+  subgraph renderer["Renderer"]
+    D["dashboard"]
+    S["settings"]
+    F["floating-widget"]
+    TP["tray-popover"]
+  end
+
+  subgraph bridge["Preload / IPC"]
+    PL["preload.js"]
+  end
+
+  subgraph main["Electron main"]
+    MJ["main.js"]
+    TR["tray.js"]
+    SC["scheduler.js"]
+    AL["alerts.js"]
+    US["usage-store.js"]
+    ST["store.js"]
+  end
+
+  subgraph providers["src/providers"]
+    R["registry.js"]
+    PA["claude · gemini · grok · cursor · perplexity"]
+  end
+
+  subgraph data["Local persistence"]
+    SQL[(SQLite history)]
+    ES["electron-store settings"]
+  end
+
+  D & S & F & TP --> PL
+  PL --> MJ
+  MJ --> TR & SC & AL
+  SC --> R
+  R --> PA
+  SC --> US
+  US --> SQL
+  MJ --> ST
+  ST --> ES
+```
+
+| Layer | Tech |
+|-------|------|
+| Shell | Electron 34, system tray, native notifications |
+| Main process | Scheduler, provider registry, auth windows, tray gauge |
+| Renderer | Dashboard, settings, floating widget, tray popover |
+| Providers | Per-adapter fetch + parse (browser, CLI, IDE tokens) |
+| Persistence | SQLite usage history + electron-store settings |
 
 ---
 
