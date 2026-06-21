@@ -48,8 +48,8 @@
     "koffi": "^3.0.2"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
-    "electron-builder": "^24.9.1",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.15.3",
     "playwright": "^1.60.0"
   },
   "build": {
