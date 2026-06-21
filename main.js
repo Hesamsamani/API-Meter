@@ -3,7 +3,7 @@ const path = require('path');
 const { createRegistry } = require('./src/providers/registry');
 const { UsageStore } = require('./src/main/usage-store');
 const { CollectorScheduler } = require('./src/main/scheduler');
-const { getHistory, settings } = require('./src/main/store');
+const { getHistory, isSecretSettingsKey, redactSettingsForRenderer, settings } = require('./src/main/store');
 const { providerLogoUrl } = require('./src/main/assets');
 const { createTray } = require('./src/main/tray');
 const { AlertManager } = require('./src/main/alerts');
@@ -48,6 +48,7 @@ let lastWidgetProviderCount = 1;
 
 function mergeSettingsPatch(patch = {}) {
   for (const [key, value] of Object.entries(patch)) {
+    if (isSecretSettingsKey(key)) continue;
     if (key === 'floatingWidget' && value && typeof value === 'object') {
       const prev = settings.get('floatingWidget') || {};
       const merged = {
@@ -144,7 +145,7 @@ function applySettingsPatch(patch) {
 }
 
 function broadcastSettings() {
-  const payload = settings.store;
+  const payload = redactSettingsForRenderer(settings.store);
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send('settings:updated', payload);
@@ -242,10 +243,10 @@ function registerIpc() {
       throw err;
     }
   });
-  ipcMain.handle('settings:get', () => settings.store);
+  ipcMain.handle('settings:get', () => redactSettingsForRenderer(settings.store));
   ipcMain.handle('settings:update', (_e, patch) => {
     applySettingsPatch(patch || {});
-    return settings.store;
+    return redactSettingsForRenderer(settings.store);
   });
 
   ipcMain.on('window:minimize', (e) => {

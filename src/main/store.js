@@ -33,6 +33,22 @@ const settings = new Store({
   },
 });
 
+const SECRET_KEY_PATTERN = /^secret_/;
+const SECRET_META_KEY_PATTERN = /^secret_meta_/;
+
+function isSecretSettingsKey(key) {
+  return SECRET_KEY_PATTERN.test(key) || SECRET_META_KEY_PATTERN.test(key);
+}
+
+function redactSettingsForRenderer(storeObject = {}) {
+  const redacted = {};
+  for (const [key, value] of Object.entries(storeObject)) {
+    if (isSecretSettingsKey(key)) continue;
+    redacted[key] = value;
+  }
+  return redacted;
+}
+
 function secretMetaKey(key) {
   return `secret_meta_${key}`;
 }
@@ -44,9 +60,7 @@ function setSecret(key, value) {
     return;
   }
   if (!safeStorage.isEncryptionAvailable()) {
-    settings.set(`secret_${key}`, value);
-    settings.set(secretMetaKey(key), 'plain');
-    return;
+    throw new Error('safeStorage encryption is not available; refusing to persist secret');
   }
   settings.set(`secret_${key}`, safeStorage.encryptString(String(value)).toString('base64'));
   settings.set(secretMetaKey(key), 'enc');
@@ -95,6 +109,8 @@ function getHistory(providerId) {
 
 module.exports = {
   settings,
+  isSecretSettingsKey,
+  redactSettingsForRenderer,
   setSecret,
   getSecret,
   setProviderDisconnected,
