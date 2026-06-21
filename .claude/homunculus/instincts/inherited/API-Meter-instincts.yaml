@@ -1,0 +1,335 @@
+# Instincts generated from https://github.com/Hesamsamani/API-Meter
+# Generated: 2026-06-21T04:40:16.424Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: API-Meter-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Hesamsamani/API-Meter
+---
+
+# API Meter Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: fix
+
+## Evidence
+
+- 1 commits analyzed
+- Detected conventional commit pattern
+- Examples: fix(audit): cycle 001 P1 security fixes
+
+---
+id: API-Meter-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Hesamsamani/API-Meter
+---
+
+# API Meter Commit Length
+
+## Action
+
+Keep commit messages concise (~39 characters)
+
+## Evidence
+
+- Average commit message length: 39 chars
+- Based on 1 commits
+
+---
+id: API-Meter-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Hesamsamani/API-Meter
+---
+
+# API Meter Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: API-Meter-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Hesamsamani/API-Meter
+---
+
+# API Meter Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: API-Meter-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Hesamsamani/API-Meter
+---
+
+# API Meter Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: api-meter-instinct-file-naming
+trigger: "When creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct File Naming
+
+## Action
+
+Name the file using camelCase
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
+---
+id: api-meter-instinct-function-naming
+trigger: "When defining a new function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Function Naming
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
+---
+id: api-meter-instinct-class-naming
+trigger: "When defining a new class"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Class Naming
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
+---
+id: api-meter-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Constant Naming
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in files: src/main/constants.js
+
+---
+id: api-meter-instinct-import-style
+trigger: "When importing modules"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Import Style
+
+## Action
+
+Use absolute import paths
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
+---
+id: api-meter-instinct-export-style
+trigger: "When exporting functions or classes"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Export Style
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
+---
+id: api-meter-instinct-commit-prefix
+trigger: "When writing a commit message for a bug fix"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Commit Prefix
+
+## Action
+
+Prefix the commit message with 'fix'
+
+## Evidence
+
+- Seen in commit: fix(audit): cycle 001 P1 security fixes
+
+---
+id: api-meter-instinct-commit-format
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Commit Format
+
+## Action
+
+Use the conventional commit format: <type>(<scope>): <description>
+
+## Evidence
+
+- Seen in commit: fix(audit): cycle 001 P1 security fixes
+
+---
+id: api-meter-instinct-commit-length
+trigger: "When writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Commit Length
+
+## Action
+
+Keep the commit message concise, around 39 characters on average
+
+## Evidence
+
+- Average length: 39, Example: fix(audit): cycle 001 P1 security fixes
+
+---
+id: api-meter-instinct-test-location
+trigger: "When adding new tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Test Location
+
+## Action
+
+Place test files in the separate 'tests' folder
+
+## Evidence
+
+- Pattern in folder structure: tests
+
+---
+id: api-meter-instinct-src-organization
+trigger: "When adding new source files"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Src Organization
+
+## Action
+
+Place source files in the 'src/main' folder
+
+## Evidence
+
+- Pattern in folder structure: src/main
+
+---
+id: api-meter-instinct-error-handling
+trigger: "When handling errors in code"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Hesamsamani/API-Meter
+---
+
+# Api Meter Instinct Error Handling
+
+## Action
+
+Use try-catch blocks for error handling
+
+## Evidence
+
+- Pattern in files: src/main/apiMeter.js
+
