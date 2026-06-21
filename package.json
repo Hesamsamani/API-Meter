@@ -30,7 +30,7 @@
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
-    "test": "node --test tests/**/*.test.js",
+    "test": "node scripts/run-tests.mjs",
     "icons:generate": "node scripts/generate-icons.js",
     "screenshots": "node scripts/capture-readme-screenshots.mjs",
     "build": "electron-builder",
@@ -48,7 +48,7 @@
     "koffi": "^3.0.2"
   },
   "devDependencies": {
-    "electron": "^28.3.3",
+    "electron": "^34.0.0",
     "electron-builder": "^24.9.1",
     "playwright": "^1.60.0"
   },
