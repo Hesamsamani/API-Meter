@@ -30,7 +30,7 @@
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
-    "test": "node --test tests/main/*.test.js tests/providers/*.test.js tests/renderer/*.test.js tests/shared/*.test.js tests/smoke.test.js",
+    "test": "node scripts/run-tests.mjs",
     "icons:generate": "node scripts/generate-icons.js",
     "screenshots": "node scripts/capture-readme-screenshots.mjs",
     "build": "electron-builder",
